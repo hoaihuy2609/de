@@ -201,17 +201,32 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                         + Thêm
                     </button>
 
-                    {/* Admin: trạng thái đã đăng / nháp */}
-                    {isAdmin && (
-                        <span style={{
-                            fontSize: '9px', fontWeight: 700,
-                            padding: '2px 6px', borderRadius: '5px',
-                            background: blog.is_published ? '#EAF3EE' : '#F3ECF8',
-                            color: blog.is_published ? '#448361' : '#9065B0',
-                            border: `1px solid ${blog.is_published ? '#B7D9C4' : '#C8A8DC'}`,
-                        }}>
-                            {blog.is_published ? 'Đã đăng' : 'Nháp'}
-                        </span>
+                    {/* Admin: nút Sửa (thay thế badge "Đã đăng / Nháp") */}
+                    {isAdmin && onEditBlog && (
+                        <button
+                            onClick={e => { e.stopPropagation(); onEditBlog(blog); }}
+                            title="Chỉnh sửa bài viết"
+                            style={{
+                                fontSize: '9px', fontWeight: 700,
+                                padding: '2px 8px', borderRadius: '5px', cursor: 'pointer',
+                                background: blog.is_published ? '#EAF3EE' : '#F3ECF8',
+                                color: blog.is_published ? '#448361' : '#9065B0',
+                                border: `1px solid ${blog.is_published ? '#B7D9C4' : '#C8A8DC'}`,
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.background = '#EEF0FB';
+                                e.currentTarget.style.color = '#6B7CDB';
+                                e.currentTarget.style.borderColor = '#D0D5F5';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.background = blog.is_published ? '#EAF3EE' : '#F3ECF8';
+                                e.currentTarget.style.color = blog.is_published ? '#448361' : '#9065B0';
+                                e.currentTarget.style.borderColor = blog.is_published ? '#B7D9C4' : '#C8A8DC';
+                            }}
+                        >
+                            ✎ Sửa
+                        </button>
                     )}
                 </div>
             </div>
