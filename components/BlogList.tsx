@@ -1,10 +1,330 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BlogPost } from '../types';
 import { BookOpen, Calendar, ChevronRight, Edit3, Plus, Search, Clock, Filter, Atom, FileText, Tag, MessageCircle } from 'lucide-react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+
+// ─────────────────────────────────────────────────────────────
+// Mini renderers — tái sử dụng logic của SolutionRenderer để
+// hiển thị đề bài trực tiếp trên card (đồng nhất 100% với
+// giao diện chi tiết khi click vào)
+// ─────────────────────────────────────────────────────────────
+
+function KatexInlineCard({ tex }: { tex: string }) {
+    const ref = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        if (!ref.current || !tex?.trim()) return;
+        try { katex.render(tex, ref.current, { throwOnError: false, displayMode: false }); }
+        catch (_) {}
+    }, [tex]);
+    return <span ref={ref} />;
+}
+
+function KatexBlockCard({ tex }: { tex: string }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!ref.current || !tex?.trim()) return;
+        try { katex.render(tex, ref.current, { throwOnError: false, displayMode: true }); }
+        catch (_) {}
+    }, [tex]);
+    return <div ref={ref} style={{ textAlign: 'center', padding: '4px 0', overflowX: 'auto' }} />;
+}
+
+function renderMathCard(text: string): React.ReactNode[] {
+    return text.split(/(\$[^$]+\$|\\\([^)]*\\\))/g).map((part, i) => {
+        if (part.startsWith('$') && part.endsWith('$') && part.length > 1)
+            return <KatexInlineCard key={i} tex={part.slice(1, -1)} />;
+        if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 3)
+            return <KatexInlineCard key={i} tex={part.slice(2, -2)} />;
+        return <span key={i}>{part}</span>;
+    });
+}
+
+function TextWithMathCard({ text }: { text: string }) {
+    if (!text) return null;
+    return (
+        <>
+            {text.split(/(\[center\][\s\S]*?\[\/center\]|\[justify\][\s\S]*?\[\/justify\])/g).map((block, i) => {
+                if (block.startsWith('[center]') && block.endsWith('[/center]'))
+                    return <div key={i} style={{ textAlign: 'center' }}>{renderMathCard(block.slice(8, -9))}</div>;
+                if (block.startsWith('[justify]') && block.endsWith('[/justify]'))
+                    return <div key={i} style={{ textAlign: 'justify' }}>{renderMathCard(block.slice(9, -10))}</div>;
+                return <React.Fragment key={i}>{renderMathCard(block)}</React.Fragment>;
+            })}
+        </>
+    );
+}
+
+// Parse blog.content → lấy câu hỏi đầu tiên để hiển thị trên card
+interface CardQuestionData {
+    questionNo: string;
+    questionText: string;
+    questionLatex: string;
+    type: 'tu_luan' | 'dung_sai';
+}
+
+function parseCardQuestion(content: string): CardQuestionData | null {
+    try {
+        const parsed = JSON.parse(content);
+        if (parsed.type !== 'physics_solution' || !parsed.data) return null;
+        const data = parsed.data;
+        if (data.questions && data.questions.length > 0) {
+            const q = data.questions[0];
+            return {
+                questionNo: q.question_no || '',
+                questionText: q.question_text || '',
+                questionLatex: q.question_latex || '',
+                type: q.type === 'dung_sai' ? 'dung_sai' : 'tu_luan',
+            };
+        }
+        // Backward compat: root-level single question
+        return {
+            questionNo: data.question_no || '',
+            questionText: data.question_text || '',
+            questionLatex: data.question_latex || '',
+            type: 'tu_luan',
+        };
+    } catch {
+        return null;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CARD THUMBNAIL: Khung đề bài (toàn bộ card là đề bài)
+// ─────────────────────────────────────────────────────────────
+
+interface QuestionCardProps {
+    blog: BlogPost;
+    isAdmin: boolean;
+    onEditBlog?: (blog: BlogPost) => void;
+    onClick: () => void;
+    gc: { bg: string; text: string; dot: string };
+}
+
+function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardProps) {
+    const q = parseCardQuestion(blog.content);
+    const isDungSai = q?.type === 'dung_sai';
+    const hasQuestion = q && (q.questionText || q.questionLatex);
+
+    return (
+        <article
+            onClick={onClick}
+            style={{
+                borderRadius: '14px',
+                overflow: 'hidden',
+                cursor: 'pointer',
+                border: '1px solid #E9E9E7',
+                background: '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'all 0.2s',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            }}
+            onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#CFCFCB';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '#E9E9E7';
+                e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)';
+                e.currentTarget.style.transform = 'translateY(0)';
+            }}
+        >
+            {/* ── Thanh Header ── */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                borderBottom: '1px solid #F0F0EE',
+                background: '#FAFAFA',
+                gap: '8px',
+                flexShrink: 0,
+            }}>
+                {/* Bên trái: Số câu + Loại bài */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {q?.questionNo ? (
+                        <span style={{
+                            fontSize: '11px', fontWeight: 700, color: '#1A1A1A',
+                            background: '#F1F0EC', padding: '2px 8px',
+                            borderRadius: '5px', border: '1px solid #E2E1DD',
+                        }}>
+                            {q.questionNo}
+                        </span>
+                    ) : null}
+                    <span style={{
+                        fontSize: '10px', fontWeight: 700,
+                        padding: '2px 8px', borderRadius: '5px',
+                        background: isDungSai ? '#FEF3C7' : '#EEF0FB',
+                        color: isDungSai ? '#92400E' : '#6B7CDB',
+                        border: `1px solid ${isDungSai ? '#FDE68A' : '#D0D5F5'}`,
+                    }}>
+                        {isDungSai ? 'Đúng / Sai' : q ? 'Tự luận' : 'Bài viết'}
+                    </span>
+                    {/* Grade badge */}
+                    <span style={{
+                        fontSize: '10px', fontWeight: 700, letterSpacing: '0.02em',
+                        padding: '2px 8px', borderRadius: '5px',
+                        background: gc.bg, color: gc.text, border: `1px solid ${gc.dot}30`,
+                    }}>
+                        {(blog.grade || 0) === 0 ? 'Chung' : `Lớp ${blog.grade}`}
+                    </span>
+                </div>
+
+                {/* Bên phải: Mức độ (placeholder) + Thêm + Admin status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {/* Mức độ — placeholder cho Bước 2 */}
+                    <span style={{
+                        fontSize: '10px', fontWeight: 700,
+                        padding: '2px 8px', borderRadius: '5px',
+                        background: '#F1F0EC', color: '#AEACA8',
+                        border: '1px solid #E2E1DD',
+                    }}>
+                        Mức —
+                    </span>
+
+                    {/* Nút Thêm — chức năng code sau */}
+                    <button
+                        onClick={e => e.stopPropagation()}
+                        title="Thêm"
+                        style={{
+                            fontSize: '11px', fontWeight: 700, lineHeight: 1,
+                            padding: '2px 7px', borderRadius: '5px',
+                            background: '#F1F0EC', color: '#787774',
+                            border: '1px solid #E2E1DD', cursor: 'pointer',
+                            transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#EEF0FB'; e.currentTarget.style.color = '#6B7CDB'; e.currentTarget.style.borderColor = '#D0D5F5'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#F1F0EC'; e.currentTarget.style.color = '#787774'; e.currentTarget.style.borderColor = '#E2E1DD'; }}
+                    >
+                        + Thêm
+                    </button>
+
+                    {/* Admin: trạng thái đã đăng / nháp */}
+                    {isAdmin && (
+                        <span style={{
+                            fontSize: '9px', fontWeight: 700,
+                            padding: '2px 6px', borderRadius: '5px',
+                            background: blog.is_published ? '#EAF3EE' : '#F3ECF8',
+                            color: blog.is_published ? '#448361' : '#9065B0',
+                            border: `1px solid ${blog.is_published ? '#B7D9C4' : '#C8A8DC'}`,
+                        }}>
+                            {blog.is_published ? 'Đã đăng' : 'Nháp'}
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Vùng đề bài (có scroll nếu dài) ── */}
+            {hasQuestion ? (
+                <div
+                    style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        padding: '14px 16px',
+                        fontSize: '13.5px',
+                        color: '#374151',
+                        lineHeight: 1.7,
+                        fontFamily: "'Inter', -apple-system, sans-serif",
+                        // Custom scrollbar nhỏ gọn
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: '#D1D5DB transparent',
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    onWheel={e => e.stopPropagation()}
+                >
+                    <style>{`.katex { color: #1A1A1A !important; font-size: 1em !important; }`}</style>
+                    {q!.questionText && (
+                        <div style={{ marginBottom: q!.questionLatex ? '8px' : 0, whiteSpace: 'pre-wrap' }}>
+                            <TextWithMathCard text={q!.questionText} />
+                        </div>
+                    )}
+                    {q!.questionLatex && <KatexBlockCard tex={q!.questionLatex} />}
+                </div>
+            ) : (
+                /* Fallback: bài viết thường không phải lời giải */
+                <div style={{
+                    flex: 1, overflowY: 'auto', padding: '14px 16px',
+                    fontSize: '13.5px', color: '#374151', lineHeight: 1.7,
+                }}>
+                    <p style={{ margin: 0, color: '#787774' }}>{blog.summary}</p>
+                </div>
+            )}
+
+            {/* ── Footer: Tiêu đề + Meta + LỜI GIẢI / Edit ── */}
+            <div style={{
+                padding: '10px 14px',
+                borderTop: '1px solid #F0F0EE',
+                background: '#FAFAFA',
+                flexShrink: 0,
+            }}>
+                {/* Tiêu đề */}
+                <h3 style={{
+                    fontSize: '13px', fontWeight: 650, color: '#1A1A1A',
+                    lineHeight: 1.4, marginBottom: '6px',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                }}>
+                    {blog.title}
+                </h3>
+
+                {/* Meta + Action */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', fontWeight: 600, color: '#AEACA8' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <Calendar style={{ width: '11px', height: '11px' }} />
+                            {new Date(blog.created_at).toLocaleDateString('vi-VN')}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <Clock style={{ width: '11px', height: '11px' }} />
+                            {Math.max(1, Math.ceil(blog.content.trim().split(/\s+/).length / 200))} phút
+                        </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {/* Badge LỜI GIẢI hoặc category */}
+                        {blog.category && (
+                            <span style={{
+                                fontSize: '9px', fontWeight: 700, textTransform: 'uppercase',
+                                padding: '2px 7px', borderRadius: '4px',
+                                background: '#EEF0FB', color: '#6B7CDB',
+                            }}>
+                                {blog.category}
+                            </span>
+                        )}
+
+                        {/* Admin: nút edit */}
+                        {isAdmin && onEditBlog && (
+                            <button
+                                onClick={e => { e.stopPropagation(); onEditBlog(blog); }}
+                                style={{
+                                    padding: '4px', borderRadius: '5px', border: 'none',
+                                    background: '#F7F6F3', color: '#787774', cursor: 'pointer',
+                                    display: 'flex', transition: 'all 0.15s',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#EEF0FB'; e.currentTarget.style.color = '#6B7CDB'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#F7F6F3'; e.currentTarget.style.color = '#787774'; }}
+                            >
+                                <Edit3 style={{ width: '12px', height: '12px' }} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </article>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────
 
 interface BlogListProps {
     isAdmin: boolean;
-    studentGrade?: number | null; // grade của học sinh đang đăng nhập (10/11/12), null nếu chưa biết
+    studentGrade?: number | null;
     onReadBlog: (blog: BlogPost) => void;
     onEditBlog?: (blog: BlogPost) => void;
     onCreateBlog?: () => void;
@@ -19,7 +339,7 @@ const GRADE_COLORS: Record<number, { bg: string; text: string; dot: string }> = 
     12: { bg: '#F3ECF8', text: '#9065B0', dot: '#9065B0' },
     11: { bg: '#EEF0FB', text: '#6B7CDB', dot: '#6B7CDB' },
     10: { bg: '#EAF3EE', text: '#448361', dot: '#448361' },
-    0: { bg: '#F1F0EC', text: '#787774', dot: '#AEACA8' },
+    0:  { bg: '#F1F0EC', text: '#787774', dot: '#AEACA8' },
 };
 
 const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, onEditBlog, onCreateBlog, onBlogsLoaded, getBlogs }) => {
@@ -55,18 +375,13 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
         // Ẩn đề thi (exam_paper) khỏi Góc học tập của học sinh — chỉ admin mới thấy để quản lý
         if (!isAdmin && b.category === 'exam_paper') return false;
 
-        // ── Lọc theo khối lớp học sinh ──────────────────────────────────
-        // Admin thấy tất cả. Học sinh chỉ thấy bài "Chung" (grade=0)
-        // hoặc đúng khối của mình. Không cho học sinh xem lén bài lớp khác.
+        // Lọc theo khối lớp học sinh
         const postGrade = b.grade || 0;
         if (!isAdmin && studentGrade) {
-            // Bài grade>0 mà không khớp khối học sinh → ẩn hoàn toàn
             if (postGrade !== 0 && postGrade !== studentGrade) return false;
         }
 
-        // ── Tab filter (trong tập bài đã được phép xem) ─────────────────
-        // gradeFilter=0 → "Tất cả" → hiện cả "Chung" lẫn bài đúng khối
-        // gradeFilter=N → chỉ hiện bài grade=N (không hiện "Chung")
+        // Tab filter
         const matchGrade = gradeFilter === 0 || postGrade === gradeFilter;
 
         const q = debouncedSearch.toLowerCase();
@@ -76,7 +391,6 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
         return matchSearch && matchCat && matchTag && matchGrade;
     }), [blogs, debouncedSearch, selectedCategory, selectedTag, gradeFilter, isAdmin, studentGrade]);
 
-
     const allGradeTabs = [
         { label: 'Tất cả', value: 0, color: '#787774' },
         { label: 'Lớp 12', value: 12, color: '#9065B0' },
@@ -84,7 +398,6 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
         { label: 'Lớp 10', value: 10, color: '#448361' },
     ];
     // Học sinh chỉ thấy "Tất cả" + tab đúng khối của mình
-    // Admin thấy đủ 4 tab
     const gradeTabs = (!isAdmin && studentGrade)
         ? allGradeTabs.filter(t => t.value === 0 || t.value === studentGrade)
         : allGradeTabs;
@@ -246,146 +559,19 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
                     </p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                /* ── Grid 2 cột (tối đa), mỗi card tối thiểu 400px ── */
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
                     {filteredBlogs.map(blog => {
                         const gc = GRADE_COLORS[blog.grade || 0] || GRADE_COLORS[0];
                         return (
-                            <article
+                            <QuestionCard
                                 key={blog.id}
+                                blog={blog}
+                                isAdmin={isAdmin}
+                                onEditBlog={onEditBlog}
                                 onClick={() => onReadBlog(blog)}
-                                style={{
-                                    borderRadius: '12px', overflow: 'hidden', cursor: 'pointer',
-                                    border: '1px solid #E9E9E7', background: '#fff',
-                                    display: 'flex', flexDirection: 'column',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={e => {
-                                    e.currentTarget.style.borderColor = '#CFCFCB';
-                                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)';
-                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                }}
-                                onMouseLeave={e => {
-                                    e.currentTarget.style.borderColor = '#E9E9E7';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                }}
-                            >
-                                {/* Thumbnail */}
-                                <div style={{ position: 'relative', height: '160px', overflow: 'hidden', background: '#F7F6F3' }}>
-                                    {blog.cover_image ? (
-                                        <img src={blog.cover_image} alt={blog.title} loading="lazy"
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }}
-                                            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                        />
-                                    ) : (
-                                        <div style={{
-                                            width: '100%', height: '100%', display: 'flex',
-                                            alignItems: 'center', justifyContent: 'center',
-                                            background: 'linear-gradient(135deg, #F7F6F3, #EEF0FB)'
-                                        }}>
-                                            <div style={{
-                                                width: '48px', height: '48px', borderRadius: '14px',
-                                                background: '#fff', border: '1px solid #E9E9E7',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                boxShadow: '0 2px 8px rgba(107,124,219,0.08)'
-                                            }}>
-                                                <Atom style={{ width: '24px', height: '24px', color: '#6B7CDB' }} />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Grade badge */}
-                                    <span style={{
-                                        position: 'absolute', top: '10px', left: '10px',
-                                        padding: '3px 10px', borderRadius: '6px', fontSize: '10px',
-                                        fontWeight: 700, letterSpacing: '0.03em',
-                                        background: gc.bg, color: gc.text, border: `1px solid ${gc.dot}30`
-                                    }}>
-                                        {(blog.grade || 0) === 0 ? 'Chung' : `Lớp ${blog.grade}`}
-                                    </span>
-
-                                    {/* Admin status */}
-                                    {isAdmin && (
-                                        <span style={{
-                                            position: 'absolute', top: '10px', right: '10px',
-                                            padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 700,
-                                            background: blog.is_published ? '#EAF3EE' : '#F3ECF8',
-                                            color: blog.is_published ? '#448361' : '#9065B0',
-                                            border: `1px solid ${blog.is_published ? '#B7D9C4' : '#C8A8DC'}`
-                                        }}>
-                                            {blog.is_published ? 'Đã đăng' : 'Nháp'}
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Content */}
-                                <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                    {/* Meta */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', fontWeight: 600, color: '#AEACA8', marginBottom: '8px' }}>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <Calendar style={{ width: '12px', height: '12px' }} />
-                                            {new Date(blog.created_at).toLocaleDateString('vi-VN')}
-                                        </span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <Clock style={{ width: '12px', height: '12px' }} />
-                                            {estimateReadTime(blog.content)} phút
-                                        </span>
-                                    </div>
-
-                                    {/* Title */}
-                                    <h3 style={{
-                                        fontSize: '15px', fontWeight: 650, color: '#1A1A1A',
-                                        lineHeight: 1.4, marginBottom: '6px',
-                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden'
-                                    }}>
-                                        {blog.title}
-                                    </h3>
-
-                                    {/* Summary */}
-                                    <p style={{
-                                        fontSize: '13px', color: '#787774', lineHeight: 1.6, flex: 1,
-                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden', marginBottom: '12px'
-                                    }}>
-                                        {blog.summary}
-                                    </p>
-
-                                    {/* Footer */}
-                                    <div style={{
-                                        paddingTop: '12px', borderTop: '1px solid #F0F0EE',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                                    }}>
-                                        {blog.category ? (
-                                            <span style={{
-                                                fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
-                                                padding: '3px 8px', borderRadius: '5px',
-                                                background: '#EEF0FB', color: '#6B7CDB'
-                                            }}>{blog.category}</span>
-                                        ) : <span />}
-
-                                        {isAdmin && onEditBlog ? (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onEditBlog(blog); }}
-                                                style={{
-                                                    padding: '5px', borderRadius: '6px', border: 'none',
-                                                    background: '#F7F6F3', color: '#787774', cursor: 'pointer',
-                                                    display: 'flex', transition: 'all 0.15s'
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.background = '#EEF0FB'; e.currentTarget.style.color = '#6B7CDB'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = '#F7F6F3'; e.currentTarget.style.color = '#787774'; }}
-                                            >
-                                                <Edit3 style={{ width: '14px', height: '14px' }} />
-                                            </button>
-                                        ) : (
-                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600, color: '#6B7CDB' }}>
-                                                Đọc <ChevronRight style={{ width: '14px', height: '14px' }} />
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </article>
+                                gc={gc}
+                            />
                         );
                     })}
                 </div>
