@@ -327,8 +327,8 @@ export default function SolutionRenderer({ content, className = "" }: SolutionRe
   const { examName, questions } = parsed;
 
   return (
-    <div className={`space-y-12 font-sans ${className}`}>
-      <style>{`.katex { color: #1A1A1A !important; }`}</style>
+    <div className={`solution-renderer space-y-12 font-sans ${className}`} style={{ fontFamily: "'KaTeX_Main', 'Computer Modern', serif" }}>
+      <style>{`.katex { color: #1A1A1A !important; } .solution-renderer, .solution-renderer * { font-family: 'KaTeX_Main', 'Computer Modern', serif !important; } .solution-renderer .font-mono, .solution-renderer span.font-mono { font-family: monospace !important; }`}</style>
 
       {/* Tên đề thi */}
       {examName && (

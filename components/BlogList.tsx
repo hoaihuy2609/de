@@ -226,7 +226,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                         fontSize: '13.5px',
                         color: '#374151',
                         lineHeight: 1.7,
-                        fontFamily: "'Inter', -apple-system, sans-serif",
+                        fontFamily: "'KaTeX_Main', 'Computer Modern', serif",
                         scrollbarWidth: 'thin',
                         scrollbarColor: '#D1D5DB transparent',
                     }}
