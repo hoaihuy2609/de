@@ -231,11 +231,11 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                 </div>
             </div>
 
-            {/* ── Vùng đề bài (scroll nếu dài, click toàn bộ card = vào xem) ── */}
+            {/* ── Vùng đề bài: chiều cao cố định, scroll nếu đề dài ── */}
             {hasQuestion ? (
                 <div
                     style={{
-                        flex: 1,
+                        height: '220px',
                         overflowY: 'auto',
                         padding: '14px 16px',
                         fontSize: '13.5px',
@@ -258,7 +258,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
             ) : (
                 /* Fallback: bài viết thường không phải lời giải */
                 <div style={{
-                    flex: 1, overflowY: 'auto', padding: '14px 16px',
+                    height: '220px', overflowY: 'auto', padding: '14px 16px',
                     fontSize: '13.5px', color: '#374151', lineHeight: 1.7,
                 }}>
                     <p style={{ margin: 0, color: '#787774' }}>{blog.summary}</p>
