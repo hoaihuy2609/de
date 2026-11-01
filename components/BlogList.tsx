@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BlogPost } from '../types';
-import { BookOpen, Calendar, ChevronRight, Edit3, Plus, Search, Clock, Filter, Atom, FileText, Tag, MessageCircle } from 'lucide-react';
+import { BookOpen, Plus, Search, Filter, FileText } from 'lucide-react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
@@ -216,7 +216,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                 </div>
             </div>
 
-            {/* ── Vùng đề bài (có scroll nếu dài) ── */}
+            {/* ── Vùng đề bài (scroll nếu dài, click toàn bộ card = vào xem) ── */}
             {hasQuestion ? (
                 <div
                     style={{
@@ -227,11 +227,9 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                         color: '#374151',
                         lineHeight: 1.7,
                         fontFamily: "'Inter', -apple-system, sans-serif",
-                        // Custom scrollbar nhỏ gọn
                         scrollbarWidth: 'thin',
                         scrollbarColor: '#D1D5DB transparent',
                     }}
-                    onClick={e => e.stopPropagation()}
                     onWheel={e => e.stopPropagation()}
                 >
                     <style>{`.katex { color: #1A1A1A !important; font-size: 1em !important; }`}</style>
@@ -251,69 +249,6 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                     <p style={{ margin: 0, color: '#787774' }}>{blog.summary}</p>
                 </div>
             )}
-
-            {/* ── Footer: Tiêu đề + Meta + LỜI GIẢI / Edit ── */}
-            <div style={{
-                padding: '10px 14px',
-                borderTop: '1px solid #F0F0EE',
-                background: '#FAFAFA',
-                flexShrink: 0,
-            }}>
-                {/* Tiêu đề */}
-                <h3 style={{
-                    fontSize: '13px', fontWeight: 650, color: '#1A1A1A',
-                    lineHeight: 1.4, marginBottom: '6px',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 1,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                }}>
-                    {blog.title}
-                </h3>
-
-                {/* Meta + Action */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', fontWeight: 600, color: '#AEACA8' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <Calendar style={{ width: '11px', height: '11px' }} />
-                            {new Date(blog.created_at).toLocaleDateString('vi-VN')}
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <Clock style={{ width: '11px', height: '11px' }} />
-                            {Math.max(1, Math.ceil(blog.content.trim().split(/\s+/).length / 200))} phút
-                        </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {/* Badge LỜI GIẢI hoặc category */}
-                        {blog.category && (
-                            <span style={{
-                                fontSize: '9px', fontWeight: 700, textTransform: 'uppercase',
-                                padding: '2px 7px', borderRadius: '4px',
-                                background: '#EEF0FB', color: '#6B7CDB',
-                            }}>
-                                {blog.category}
-                            </span>
-                        )}
-
-                        {/* Admin: nút edit */}
-                        {isAdmin && onEditBlog && (
-                            <button
-                                onClick={e => { e.stopPropagation(); onEditBlog(blog); }}
-                                style={{
-                                    padding: '4px', borderRadius: '5px', border: 'none',
-                                    background: '#F7F6F3', color: '#787774', cursor: 'pointer',
-                                    display: 'flex', transition: 'all 0.15s',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#EEF0FB'; e.currentTarget.style.color = '#6B7CDB'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = '#F7F6F3'; e.currentTarget.style.color = '#787774'; }}
-                            >
-                                <Edit3 style={{ width: '12px', height: '12px' }} />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
         </article>
     );
 }
