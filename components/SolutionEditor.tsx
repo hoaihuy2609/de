@@ -726,8 +726,9 @@ export default function SolutionEditor({
                 <Eye className="w-4 h-4 text-indigo-500" /> Xem trước kết quả
               </h3>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 bg-[#F7F6F3]">
-              <div className="space-y-12">
+            <div className="p-6 overflow-y-auto flex-1 bg-[#F7F6F3]" style={{ fontFamily: "'KaTeX_Main', 'Computer Modern', serif" }}>
+              <style>{`.solution-editor-preview, .solution-editor-preview * { font-family: 'KaTeX_Main', 'Computer Modern', serif !important; } .solution-editor-preview .font-mono { font-family: monospace !important; }`}</style>
+              <div className="solution-editor-preview space-y-12">
                 {questions.map((q, qIdx) => (
                   <div key={qIdx} className={`space-y-5 ${qIdx !== activeQIdx ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
                     {(examName || q.questionNo || q.qText || q.qFormula) && (
