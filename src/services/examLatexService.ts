@@ -597,9 +597,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/cmu-serif">
   <style>
     @page {
       size: A4;
@@ -609,11 +607,11 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       box-sizing: border-box;
     }
     body {
-      font-family: 'Times New Roman', 'Lora', serif;
-      font-size: 11pt;
+      font-family: 'CMU Serif', 'Computer Modern', 'Latin Modern Roman', 'KaTeX_Main', serif;
+      font-size: 10.5pt;
       font-weight: 400;
       line-height: 1.35;
-      color: #1A1A1A;
+      color: #111;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       margin: 0;
