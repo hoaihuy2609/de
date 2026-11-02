@@ -474,10 +474,14 @@ export default function SolutionEditor({
         question_text:  q.qText,
         question_latex: q.qFormula,
         type:           q.type,
-        // Tự luận: lưu steps, statements là []
-        steps:       q.type === 'tu_luan'  ? q.steps      : [],
-        // Đúng/sai: lưu statements, steps là []
-        statements:  q.type === 'dung_sai' ? q.statements : [],
+        // Tự luận: lưu steps
+        steps:         q.type === 'tu_luan'    ? q.steps         : [],
+        // Đúng/sai: lưu statements
+        statements:    q.type === 'dung_sai'   ? q.statements    : [],
+        // Trắc nghiệm: lưu choices + correctChoice + solutionSteps
+        choices:       q.type === 'trac_nghiem' ? q.choices       : [],
+        correctChoice: q.type === 'trac_nghiem' ? q.correctChoice : '',
+        solutionSteps: q.type === 'trac_nghiem' ? q.solutionSteps : [],
       }));
 
       const solutionData = {
