@@ -425,3 +425,214 @@ export function openInOverleaf(texContent: string) {
   form.submit();
   document.body.removeChild(form);
 }
+
+
+/**
+ * Tự động biên soạn đề và in/xuất PDF trực tiếp ngay trong trình duyệt (100% nội bộ, không qua bên thứ 3)
+ */
+export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config: ExamStyleConfig) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Trình duyệt đang chặn cửa sổ pop-up. Vui lòng cho phép mở pop-up để xuất PDF!');
+    return;
+  }
+
+  const primaryColor = config.isCustomColor ? config.customColor : config.themeColor;
+  const tracNghiemList = questions.filter(q => q.type === 'trac_nghiem');
+  const dungSaiList = questions.filter(q => q.type === 'dung_sai');
+  const tuLuanList = questions.filter(q => q.type === 'tu_luan');
+
+  let qCount = 1;
+
+  let bodyHtml = `
+    <!-- HEADER ĐỀ THI -->
+    <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 24px;">
+      <div style="text-align: center; width: 45%;">
+        <div style="font-weight: bold; font-size: 11pt; text-transform: uppercase;">${config.headerTitle}</div>
+        <div style="font-size: 10.5pt; font-weight: bold;">${config.schoolName}</div>
+        <div style="margin-top: 4px; font-size: 9.5pt;">Mã đề thi: <b>${config.examCode}</b></div>
+      </div>
+      <div style="text-align: center; width: 50%;">
+        <div style="font-weight: bold; font-size: 13pt; text-transform: uppercase; color: ${primaryColor};">${config.examName}</div>
+        <div style="font-size: 10.5pt;">Môn thi: <b>${config.subject.toUpperCase()}</b></div>
+        <div style="font-size: 10pt; font-style: italic;">Thời gian làm bài: ${config.duration} phút</div>
+      </div>
+    </div>
+  `;
+
+  // PHẦN I: TRẮC NGHIỆM
+  if (tracNghiemList.length > 0) {
+    if (config.enableSectionTitles) {
+      bodyHtml += `
+        <div style="margin: 16px 0 10px 0;">
+          <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.choice4Title}</div>
+          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.choice4Note}</div>
+        </div>
+      `;
+    }
+
+    tracNghiemList.forEach(q => {
+      const qNum = qCount++;
+      const choices = q.choices || ['', '', '', ''];
+      const layout = calculateChoiceLayout(choices);
+      const cols = layout === 4 ? '1fr 1fr 1fr 1fr' : layout === 2 ? '1fr 1fr' : '1fr';
+
+      bodyHtml += `
+        <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
+          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
+          <div style="display: grid; grid-template-columns: ${cols}; gap: 6px 16px; margin-top: 8px;">
+            <div><b>A.</b> ${choices[0] || ''}</div>
+            <div><b>B.</b> ${choices[1] || ''}</div>
+            <div><b>C.</b> ${choices[2] || ''}</div>
+            <div><b>D.</b> ${choices[3] || ''}</div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // PHẦN II: ĐÚNG / SAI
+  if (dungSaiList.length > 0) {
+    if (config.enableSectionTitles) {
+      bodyHtml += `
+        <div style="margin: 20px 0 10px 0; page-break-before: auto;">
+          <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.trueFalseTitle}</div>
+          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.trueFalseNote}</div>
+        </div>
+      `;
+    }
+
+    dungSaiList.forEach(q => {
+      const qNum = qCount++;
+      bodyHtml += `
+        <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
+          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
+          <div style="margin-top: 6px; padding-left: 12px; display: flex; flex-direction: column; gap: 4px;">
+            ${(q.statements || []).map(st => `<div><b>${st.label})</b> ${st.claim || ''}</div>`).join('')}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // PHẦN III: TỰ LUẬN
+  if (tuLuanList.length > 0) {
+    if (config.enableSectionTitles) {
+      bodyHtml += `
+        <div style="margin: 20px 0 10px 0;">
+          <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.essayTitle}</div>
+          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.essayNote}</div>
+        </div>
+      `;
+    }
+
+    tuLuanList.forEach(q => {
+      const qNum = qCount++;
+      bodyHtml += `
+        <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
+          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
+        </div>
+      `;
+    });
+  }
+
+  // BẢNG ĐÁP ÁN (NẾU BẬT)
+  if (config.exportAnswerTable && tracNghiemList.length > 0) {
+    bodyHtml += `
+      <div style="margin-top: 30px; page-break-before: always;">
+        <div style="text-align: center; font-weight: bold; font-size: 12pt; color: ${primaryColor}; margin-bottom: 12px;">
+          BẢNG ĐÁP ÁN THAM KHẢO (MÃ ĐỀ: ${config.examCode})
+        </div>
+        <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 11pt;">
+          <tr style="background: #f5f5f5;">
+            ${tracNghiemList.map((_, i) => `<th style="border: 1px solid #333; padding: 6px;">${i + 1}</th>`).join('')}
+          </tr>
+          <tr>
+            ${tracNghiemList.map(q => `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">${q.correctChoice || '-'}</td>`).join('')}
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  // LỜI GIẢI CHI TIẾT (NẾU BẬT)
+  if (config.exportDetailedSolution) {
+    bodyHtml += `
+      <div style="margin-top: 30px; page-break-before: always;">
+        <div style="text-align: center; font-weight: bold; font-size: 14pt; color: ${primaryColor}; border-bottom: 2px solid ${primaryColor}; padding-bottom: 6px; margin-bottom: 18px;">
+          HƯỚNG DẪN GIẢI CHI TIẾT
+        </div>
+    `;
+
+    let sIdx = 1;
+    questions.forEach(q => {
+      const qNum = sIdx++;
+      bodyHtml += `
+        <div style="margin-bottom: 18px; page-break-inside: avoid;">
+          <div style="font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">${config.questionPrefix || 'Câu'} ${qNum}: ${q.qText || ''}</div>
+          <div style="padding-left: 12px; font-size: 11pt;">
+            ${(q.solutionSteps || q.steps || []).map(s => `
+              <div style="margin-bottom: 6px;">
+                ${s.title ? `<b>${s.title}:</b> ` : ''}${s.text || ''}
+                ${s.formula ? `<div style="text-align: center; margin: 4px 0;">$$${s.formula}$$</div>` : ''}
+              </div>
+            `).join('')}
+            ${q.correctChoice ? `<div style="font-weight: bold; color: #2e7d32; margin-top: 4px;">➔ Đáp án: ${q.correctChoice}</div>` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    bodyHtml += `</div>`;
+  }
+
+  const fullHtml = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>${config.examName} - Mã đề ${config.examCode}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+  <style>
+    @page { size: A4; margin: 18mm 15mm 18mm 15mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'KaTeX_Main', 'Computer Modern', 'Times New Roman', serif;
+      font-size: 12pt;
+      line-height: 1.45;
+      color: #111;
+      margin: 0;
+      padding: 15px;
+    }
+    @media print {
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  ${bodyHtml}
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false}
+        ],
+        throwOnError: false
+      });
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    });
+  </script>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(fullHtml);
+  printWindow.document.close();
+}

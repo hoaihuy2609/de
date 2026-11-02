@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import {
   X, RotateCcw, Palette, Droplets, Sliders, Layout,
   Layers, CheckSquare, FileText, Download, ExternalLink,
-  ChevronDown, Check, Sparkles, Loader2,
+  ChevronDown, Check, Sparkles, Loader2, Printer
 } from 'lucide-react';
 import {
   ExamStyleConfig, DEFAULT_EXAM_STYLE, SelectedQuestionItem,
-  generateExamLatex, downloadTexFile, openInOverleaf
+  generateExamLatex, downloadTexFile, openInOverleaf,
+  printExamDirectlyToPdf
 } from '../src/services/examLatexService';
 
 interface ExamStyleModalProps {
@@ -36,28 +37,20 @@ export const ExamStyleModal: React.FC<ExamStyleModalProps> = ({
     }
   };
 
-  // 1. Tải file .tex
+  // 1. Tải file .tex (mã nguồn cho ai cần)
   const handleDownloadTex = () => {
     const tex = generateExamLatex(questions, config);
     downloadTexFile(tex, `De_Thi_${config.subject}_Ma_${config.examCode}.tex`);
   };
 
-  // 2. Mở trực tiếp trên Overleaf
-  const handleOpenOverleaf = () => {
-    const tex = generateExamLatex(questions, config);
-    openInOverleaf(tex);
-  };
-
-  // 3. Xuất file PDF (Cách 3)
+  // 2. Xuất file PDF TRỰC TIẾP TRONG WEB (100% Client-side, không qua bên thứ 3)
   const handleExportPdf = async () => {
     setIsCompiling(true);
-    setCompileStatus('Đang tạo mã LaTeX...');
+    setCompileStatus('Đang biên soạn đề thi...');
     const tex = generateExamLatex(questions, config);
 
     try {
-      setCompileStatus('Đang biên dịch bằng TeX Engine...');
-      
-      // Thử gọi API local hoặc compile service
+      // 1. Thử gọi backend local compiler nếu có
       const res = await fetch('/api/compile-latex', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,22 +67,22 @@ export const ExamStyleModal: React.FC<ExamStyleModalProps> = ({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        setCompileStatus('Xuất PDF thành công!');
-      } else {
-        // Fallback: nếu dev endpoint chưa bật, tự động mở Overleaf để lấy PDF tức thì
-        setCompileStatus('Chuyển tiếp qua Overleaf để tải PDF...');
-        openInOverleaf(tex);
-      }
-    } catch (err) {
-      console.warn('Compile local fallback to Overleaf:', err);
-      setCompileStatus('Đang mở Overleaf...');
-      openInOverleaf(tex);
-    } finally {
-      setTimeout(() => {
+        setCompileStatus('Đã tải file PDF về máy!');
         setIsCompiling(false);
-        setCompileStatus('');
-      }, 1500);
+        return;
+      }
+    } catch (_) {
+      // Fallback sang Engine in trực tiếp trong trình duyệt
     }
+
+    // 2. Tự biên soạn và xuất PDF trực tiếp ngay trong trình duyệt (100% nội bộ)
+    setCompileStatus('Đang mở bản in PDF...');
+    printExamDirectlyToPdf(questions, config);
+
+    setTimeout(() => {
+      setIsCompiling(false);
+      setCompileStatus('');
+    }, 1000);
   };
 
   return (
@@ -387,7 +380,7 @@ export const ExamStyleModal: React.FC<ExamStyleModalProps> = ({
                   type="text"
                   value={config.footerCenter}
                   onChange={e => updateConfig('footerCenter', e.target.value)}
-                  placeholder="Footer Giữa (VD: \MakeUppercase{Trang}~\thepage\ / \pageref{LastPage})"
+                  placeholder="Footer Giữa (VD: Trang \thepage / \pageref{LastPage})"
                   className="w-full p-2 rounded border border-[#E9E9E7] text-xs font-mono bg-white"
                 />
               </div>
@@ -515,45 +508,38 @@ export const ExamStyleModal: React.FC<ExamStyleModalProps> = ({
 
         </div>
 
-        {/* ── FOOTER MODAL: 3 NÚT XUẤT BẢN ── */}
+        {/* ── FOOTER MODAL: NÚT XUẤT ĐỀ TRỰC TIẾP TRONG WEB ── */}
         <div className="px-6 py-4 bg-white border-t border-[#E9E9E7] flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-[#787774]">
             Đã chọn: <b className="text-[#1A1A1A]">{questions.length}</b> câu hỏi vào đề
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Nút 1: Tải .tex */}
+          <div className="flex items-center gap-3">
+            {/* Tải .tex */}
             <button
               onClick={handleDownloadTex}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-[#E9E9E7] hover:bg-gray-50 text-[#57564F] transition-all flex items-center gap-1.5"
+              title="Tải mã nguồn TeX về máy"
+              className="px-3 py-2 rounded-xl text-xs font-semibold border border-[#E9E9E7] hover:bg-gray-50 text-[#57564F] transition-all flex items-center gap-1.5"
             >
-              <Download className="w-3.5 h-3.5" /> Tải file .tex
+              <Download className="w-3.5 h-3.5" /> Mã nguồn .tex
             </button>
 
-            {/* Nút 2: Mở trên Overleaf */}
-            <button
-              onClick={handleOpenOverleaf}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all flex items-center gap-1.5"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Mở trên Overleaf
-            </button>
-
-            {/* Nút 3: Xuất PDF (Cách 3) */}
+            {/* Nút chính: TỰ BIÊN SOẠN & XUẤT PDF TRỰC TIẾP TRONG WEB */}
             <button
               onClick={handleExportPdf}
               disabled={isCompiling}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-md hover:opacity-95 transition-all flex items-center gap-2 disabled:opacity-50"
               style={{ background: '#7B1113' }}
             >
               {isCompiling ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{compileStatus || 'Đang biên dịch...'}</span>
+                  <span>{compileStatus || 'Đang biên soạn...'}</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>XUẤT PDF CHUẨN OVERLEAF</span>
+                  <Printer className="w-4 h-4 text-amber-300" />
+                  <span>XUẤT ĐỀ THI RA PDF</span>
                 </>
               )}
             </button>
