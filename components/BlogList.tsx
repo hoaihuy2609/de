@@ -238,7 +238,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                         height: '220px',
                         overflowY: 'auto',
                         padding: '14px 16px',
-                        fontSize: '13.5px',
+                        fontSize: '15px',
                         color: '#374151',
                         lineHeight: 1.7,
                         fontFamily: "'KaTeX_Main', 'Computer Modern', serif",
@@ -259,7 +259,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                 /* Fallback: bài viết thường không phải lời giải */
                 <div style={{
                     height: '220px', overflowY: 'auto', padding: '14px 16px',
-                    fontSize: '13.5px', color: '#374151', lineHeight: 1.7,
+                    fontSize: '15px', color: '#374151', lineHeight: 1.7,
                 }}>
                     <p style={{ margin: 0, color: '#787774' }}>{blog.summary}</p>
                 </div>
