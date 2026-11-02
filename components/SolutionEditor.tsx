@@ -22,11 +22,12 @@ interface Question {
   qText: string;
   qFormula: string;
   type: QuestionType;
-  steps: Step[];           // dùng khi type === 'tu_luan'
+  solution: string;        // Ô lời giải chi tiết duy nhất (hỗ trợ text & LaTeX)
+  steps: Step[];           // backward compat
   statements: Statement[]; // dùng khi type === 'dung_sai'
   choices: string[];       // dùng khi type === 'trac_nghiem' (A/B/C/D)
   correctChoice: string;   // 'A' | 'B' | 'C' | 'D'
-  solutionSteps: Step[];   // bước giải cho trắc nghiệm
+  solutionSteps: Step[];   // backward compat
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -36,6 +37,21 @@ const CATEGORIES = ['Lý thuyết', 'Mẹo giải bài', 'Kinh nghiệm', 'Tin t
 const STMT_LABELS: Array<'a' | 'b' | 'c' | 'd'> = ['a', 'b', 'c', 'd'];
 
 const emptyStep = (): Step => ({ title: "", text: "", formula: "", formula2: "" });
+
+const convertStepsToSolution = (steps?: Step[]): string => {
+  if (!steps || steps.length === 0) return '';
+  return steps
+    .filter(s => s && (s.title || s.text || s.formula || s.formula2))
+    .map(s => {
+      const parts: string[] = [];
+      if (s.title) parts.push(`**${s.title}**`);
+      if (s.text) parts.push(s.text);
+      if (s.formula) parts.push(`$$${s.formula}$$`);
+      if (s.formula2) parts.push(`$$${s.formula2}$$`);
+      return parts.join('\n');
+    })
+    .join('\n\n');
+};
 
 const emptyStatement = (label: 'a' | 'b' | 'c' | 'd'): Statement => ({
   label,
@@ -50,6 +66,7 @@ const emptyQuestion = (): Question => ({
   qText: "",
   qFormula: "",
   type: "tu_luan",
+  solution: "",
   steps: [emptyStep()],
   statements: STMT_LABELS.map(emptyStatement),
   choices: ['', '', '', ''],
@@ -58,19 +75,40 @@ const emptyQuestion = (): Question => ({
 });
 
 // Normalize question từ JSON cũ (backward compat)
-const normalizeQuestion = (q: any): Question => ({
-  questionNo: q.question_no || q.questionNo || "",
-  qText:      q.question_text || q.qText || "",
-  qFormula:   q.question_latex || q.qFormula || "",
-  type:       q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
-  steps:      q.steps?.length > 0 ? q.steps : [emptyStep()],
-  statements: q.statements?.length > 0
-    ? q.statements
-    : STMT_LABELS.map(emptyStatement),
-  choices: Array.isArray(q.choices) ? [0, 1, 2, 3].map(i => q.choices[i] || '') : ['', '', '', ''],
-  correctChoice: q.correctChoice || '',
-  solutionSteps: q.solutionSteps?.length > 0 ? q.solutionSteps : [emptyStep()],
-});
+const normalizeQuestion = (q: any): Question => {
+  let sol = q.solution || "";
+  if (!sol) {
+    if (q.type === 'trac_nghiem' && q.solutionSteps?.length) {
+      sol = convertStepsToSolution(q.solutionSteps);
+    } else if (q.type === 'tu_luan' && q.steps?.length) {
+      sol = convertStepsToSolution(q.steps);
+    } else if (q.type === 'dung_sai' && Array.isArray(q.statements)) {
+      const stmtSols = q.statements
+        .map((st: any) => {
+          const sText = convertStepsToSolution(st.steps);
+          return sText ? `**Ý ${st.label?.toUpperCase() || ''}:**\n${sText}` : '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+      if (stmtSols) sol = stmtSols;
+    }
+  }
+
+  return {
+    questionNo: q.question_no || q.questionNo || "",
+    qText:      q.question_text || q.qText || "",
+    qFormula:   q.question_latex || q.qFormula || "",
+    type:       q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
+    solution:   sol,
+    steps:      q.steps?.length > 0 ? q.steps : [emptyStep()],
+    statements: q.statements?.length > 0
+      ? q.statements
+      : STMT_LABELS.map(emptyStatement),
+    choices: Array.isArray(q.choices) ? [0, 1, 2, 3].map(i => q.choices[i] || '') : ['', '', '', ''],
+    correctChoice: q.correctChoice || '',
+    solutionSteps: q.solutionSteps?.length > 0 ? q.solutionSteps : [emptyStep()],
+  };
+};
 
 // ─────────────────────────────────────────────────────────────
 // SUB-COMPONENTS (KaTeX, TextWithMath, AutoResizeTextarea)
@@ -212,17 +250,6 @@ function StatementEditor({
   onUpdate: (si: number, val: Statement) => void;
   onFocus: (fieldId: string, el: any) => void;
 }) {
-  const updStep    = (i: number, k: string, v: string) =>
-    onUpdate(si, { ...st, steps: st.steps.map((s, j) => j === i ? { ...s, [k]: v } : s) });
-  const addStep    = () => onUpdate(si, { ...st, steps: [...st.steps, emptyStep()] });
-  const removeStep = (i: number) => onUpdate(si, { ...st, steps: st.steps.filter((_, j) => j !== i) });
-  const moveStep   = (i: number, dir: number) => {
-    const arr = [...st.steps], j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    onUpdate(si, { ...st, steps: arr });
-  };
-
   const verdictStyle = {
     true:  { btn: 'bg-emerald-50 border-emerald-400 text-emerald-700 font-bold', ring: 'ring-2 ring-emerald-200' },
     false: { btn: 'bg-red-50 border-red-400 text-red-700 font-bold',           ring: 'ring-2 ring-red-200'     },
@@ -231,53 +258,37 @@ function StatementEditor({
   const curStyle = verdictStyle[String(st.verdict) as 'true' | 'false' | 'null'];
 
   return (
-    <div className={`bg-white border rounded-2xl overflow-hidden shadow-sm mb-4 ${curStyle.ring} ${st.verdict === true ? 'border-emerald-300' : st.verdict === false ? 'border-red-300' : 'border-[#E9E9E7]'}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 bg-[#FCFCFA] border-b border-[#E9E9E7]">
-        <span className="font-bold text-sm text-indigo-700 tracking-wide">
+    <div className={`bg-white border rounded-xl overflow-hidden shadow-sm transition-all ${curStyle.ring} ${st.verdict === true ? 'border-emerald-300' : st.verdict === false ? 'border-red-300' : 'border-[#E9E9E7]'}`}>
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#FCFCFA] border-b border-[#E9E9E7]">
+        <span className="font-bold text-sm text-indigo-700 tracking-wide flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-800">
+            {st.label.toUpperCase()}
+          </span>
           Mệnh đề {st.label.toUpperCase()}
         </span>
         <div className="flex items-center gap-2">
           <span className="text-xs text-[#787774] font-semibold">Kết luận:</span>
           <button
+            type="button"
             onClick={() => onUpdate(si, { ...st, verdict: st.verdict === true ? null : true })}
             className={`px-3 py-1 rounded-lg text-xs border transition-all ${st.verdict === true ? verdictStyle.true.btn : 'bg-[#F7F6F3] border-[#E9E9E7] text-[#787774] hover:border-emerald-300 hover:text-emerald-600'}`}
           >✓ Đúng</button>
           <button
+            type="button"
             onClick={() => onUpdate(si, { ...st, verdict: st.verdict === false ? null : false })}
             className={`px-3 py-1 rounded-lg text-xs border transition-all ${st.verdict === false ? verdictStyle.false.btn : 'bg-[#F7F6F3] border-[#E9E9E7] text-[#787774] hover:border-red-300 hover:text-red-600'}`}
           >✗ Sai</button>
         </div>
       </div>
-
-      <div className="p-5 space-y-4">
-        {/* Nội dung mệnh đề */}
-        <div>
-          <label className="block text-[10px] font-bold mb-1.5 text-[#787774] uppercase tracking-wider">Nội dung mệnh đề (chữ)</label>
-          <AutoResizeTextarea rows={2}
-            className="w-full p-2.5 rounded-lg border border-[#E9E9E7] outline-none focus:border-indigo-500 text-sm text-gray-700 transition-colors"
-            placeholder={`VD: Tốc độ electron trước khi vào vùng điện trường bằng 3,08×10⁷ m/s`}
-            value={st.claim} onChange={e => onUpdate(si, { ...st, claim: e.target.value })} />
-        </div>
-
-
-        {/* Bước chứng minh */}
-        <div className="pt-2 border-t border-[#E9E9E7]">
-          <div className="text-[10px] font-bold text-[#787774] uppercase tracking-wider mb-3">
-            Chứng minh / lý giải
-          </div>
-          <div className="space-y-3">
-            {st.steps.map((step, i) => (
-              <StepEditor key={i} step={step} idx={i} total={st.steps.length} compact
-                onChange={updStep} onRemove={removeStep} onMove={moveStep}
-                onFocus={(fid, el) => onFocus(`stmt-${si}-${fid}`, el)} />
-            ))}
-            <button
-              onClick={addStep}
-              className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#DCDCDA] text-[#787774] text-xs font-semibold hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all flex items-center justify-center gap-1.5"
-            ><Plus className="w-3.5 h-3.5" /> Thêm bước chứng minh</button>
-          </div>
-        </div>
+      <div className="p-3">
+        <AutoResizeTextarea
+          rows={2}
+          className="w-full p-2.5 rounded-lg border border-[#E9E9E7] outline-none focus:border-indigo-500 text-sm text-gray-800 transition-colors"
+          placeholder={`Nội dung mệnh đề ${st.label.toUpperCase()}... (hỗ trợ công thức $...$)`}
+          value={st.claim}
+          onChange={e => onUpdate(si, { ...st, claim: e.target.value })}
+          onFocus={e => onFocus(`stmt-${si}`, e.target)}
+        />
       </div>
     </div>
   );
@@ -315,19 +326,12 @@ function StatementPreview({ st }: { st: Statement }) {
 
   return (
     <div className={`bg-white border rounded-xl mb-3 overflow-hidden shadow-sm ${borderColor}`}>
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#E9E9E7] bg-[#FCFCFA]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#E9E9E7] bg-[#FCFCFA]">
         <span className="font-bold text-sm text-indigo-700">Mệnh đề {st.label.toUpperCase()}</span>
         {verdictEl}
       </div>
-      <div className="p-4 space-y-2">
-        {st.claim      && <p className="text-[13px] text-[#1A1A1A] leading-relaxed m-0 whitespace-pre-wrap"><TextWithMath text={st.claim} /></p>}
-        {st.claim_latex && <KatexSpan tex={st.claim_latex} block />}
-        {st.steps.some(s => s.title || s.formula || s.text) && (
-          <div className="mt-3 pt-3 border-t border-dashed border-[#E9E9E7]">
-            <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-wider mb-2">Chứng minh</div>
-            {st.steps.map((s, i) => (s.title || s.formula || s.text) ? <StepPreview key={i} step={s} index={i} /> : null)}
-          </div>
-        )}
+      <div className="p-3 text-[14px] text-[#1A1A1A] leading-relaxed">
+        {st.claim && <TextWithMath text={st.claim} />}
       </div>
     </div>
   );
@@ -474,14 +478,15 @@ export default function SolutionEditor({
         question_text:  q.qText,
         question_latex: q.qFormula,
         type:           q.type,
-        // Tự luận: lưu steps
-        steps:         q.type === 'tu_luan'    ? q.steps         : [],
+        solution:       q.solution || '',
+        // Tự luận: lưu cả solution và steps tương thích
+        steps:         q.type === 'tu_luan'    ? (q.solution ? [{ title: '', text: q.solution, formula: '', formula2: '' }] : q.steps) : [],
         // Đúng/sai: lưu statements
         statements:    q.type === 'dung_sai'   ? q.statements    : [],
         // Trắc nghiệm: lưu choices + correctChoice + solutionSteps
         choices:       q.type === 'trac_nghiem' ? q.choices       : [],
         correctChoice: q.type === 'trac_nghiem' ? q.correctChoice : '',
-        solutionSteps: q.type === 'trac_nghiem' ? q.solutionSteps : [],
+        solutionSteps: q.type === 'trac_nghiem' ? (q.solution ? [{ title: '', text: q.solution, formula: '', formula2: '' }] : q.solutionSteps) : [],
       }));
 
       const solutionData = {
@@ -722,39 +727,69 @@ export default function SolutionEditor({
             </div>
           </div>
 
-          {/* ── TỰ LUẬN: bước giải ── */}
+          {/* ── TỰ LUẬN: Lời giải chi tiết (1 ô duy nhất) ── */}
           {activeQuestion.type === 'tu_luan' && (
             <div className="space-y-3">
-              <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg">
-                <Layers className="w-5 h-5 text-indigo-500" /> Từng bước giải — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
-              </h3>
-              {activeQuestion.steps.map((step, idx) => (
-                <StepEditor key={idx} step={step} idx={idx} total={activeQuestion.steps.length} compact
-                  onChange={updStep} onRemove={removeStep} onMove={moveStep} onFocus={trackFocus} />
-              ))}
-              <button onClick={addStep}
-                className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#DCDCDA] text-[#787774] font-semibold text-xs hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all flex items-center justify-center gap-1.5"
-              ><Plus className="w-3.5 h-3.5" /> Thêm bước tiếp theo</button>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg">
+                  <Layers className="w-5 h-5 text-indigo-500" /> Lời giải chi tiết — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
+                </h3>
+                <span className="text-xs text-[#787774]">Tự động căn đều & nhận diện Text + LaTeX ($...$, $$...$$)</span>
+              </div>
+              <div className="bg-white border border-[#E9E9E7] rounded-xl p-3 shadow-sm focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50 transition-all">
+                <AutoResizeTextarea
+                  rows={8}
+                  className="w-full p-2 outline-none text-sm text-gray-800 font-sans leading-relaxed"
+                  style={{ minHeight: '160px' }}
+                  placeholder="Nhập hoặc dán toàn bộ lời giải vào đây (hỗ trợ văn bản thường và công thức toán $E = mc^2$, $$\int f(x)dx$$)... Tự động căn đều 2 bên mép!"
+                  value={activeQuestion.solution}
+                  onChange={e => updateQ('solution', e.target.value)}
+                  onFocus={e => trackFocus(`q-sol-${activeQIdx}`, e.target)}
+                />
+              </div>
             </div>
           )}
 
-          {/* ── ĐÚNG/SAI: 4 mệnh đề ── */}
+          {/* ── ĐÚNG/SAI: 4 mệnh đề riêng + 1 ô giải chung ── */}
           {activeQuestion.type === 'dung_sai' && (
-            <div className="space-y-2">
-              <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg mb-4">
-                <Layers className="w-5 h-5 text-amber-500" /> Phân tích 4 mệnh đề — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg">
+                <Layers className="w-5 h-5 text-amber-500" /> 4 Mệnh đề Đúng / Sai — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
               </h3>
-              {activeQuestion.statements.map((st, si) => (
-                <StatementEditor key={si} st={st} si={si} onUpdate={updStatement} onFocus={trackFocus} />
-              ))}
+              <div className="space-y-3">
+                {activeQuestion.statements.map((st, si) => (
+                  <StatementEditor key={si} st={st} si={si} onUpdate={updStatement} onFocus={trackFocus} />
+                ))}
+              </div>
+
+              {/* 1 ô giải chung cho Đúng/Sai */}
+              <div className="pt-3 border-t border-[#E9E9E7] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-[#787774] uppercase tracking-wider">
+                    Hướng dẫn giải chi tiết (chung cho 4 mệnh đề)
+                  </div>
+                  <span className="text-xs text-[#787774]">Hỗ trợ Text & LaTeX ($...$, $$...$$)</span>
+                </div>
+                <div className="bg-white border border-[#E9E9E7] rounded-xl p-3 shadow-sm focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-50 transition-all">
+                  <AutoResizeTextarea
+                    rows={8}
+                    className="w-full p-2 outline-none text-sm text-gray-800 font-sans leading-relaxed"
+                    style={{ minHeight: '160px' }}
+                    placeholder="Nhập hoặc dán lời giải / lý giải cho các mệnh đề a, b, c, d vào đây... Tự động căn đều và render LaTeX!"
+                    value={activeQuestion.solution}
+                    onChange={e => updateQ('solution', e.target.value)}
+                    onFocus={e => trackFocus(`q-sol-${activeQIdx}`, e.target)}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* ── TRẮC NGHIỆM: 4 đáp án + lời giải ── */}
+          {/* ── TRẮC NGHIỆM: 4 đáp án + 1 ô giải chi tiết ── */}
           {activeQuestion.type === 'trac_nghiem' && (
             <div className="space-y-4">
               <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg">
-                <Layers className="w-5 h-5 text-emerald-500" /> Đáp án — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
+                <Layers className="w-5 h-5 text-emerald-500" /> 4 Phương án lựa chọn — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
               </h3>
               {/* 4 lựa chọn A/B/C/D */}
               <div className="space-y-2">
@@ -773,27 +808,31 @@ export default function SolutionEditor({
                     <input
                       className="flex-1 p-2.5 rounded-lg border outline-none focus:border-emerald-400 text-sm transition-colors"
                       style={{ borderColor: activeQuestion.correctChoice === lbl ? '#44836150' : '#E9E9E7', background: activeQuestion.correctChoice === lbl ? '#EAF3EE' : '#fff' }}
-                      placeholder={`Đáp án ${lbl}...`}
+                      placeholder={`Đáp án ${lbl}... (hỗ trợ gõ $...$ công thức)`}
                       value={activeQuestion.choices[ci] || ''}
                       onChange={e => { const c = [...activeQuestion.choices]; c[ci] = e.target.value; updateQ('choices', c); }}
                     />
                   </div>
                 ))}
               </div>
-              {/* Bước giải */}
-              <div className="pt-3 border-t border-[#E9E9E7] space-y-3">
-                <div className="text-xs font-bold text-[#787774] uppercase tracking-wider">Lời giải chi tiết</div>
-                {activeQuestion.solutionSteps.map((step, idx) => (
-                  <StepEditor key={idx} step={step} idx={idx} total={activeQuestion.solutionSteps.length} compact
-                    onChange={(i, k, v) => { const ss = [...activeQuestion.solutionSteps]; ss[i] = { ...ss[i], [k]: v }; updateQ('solutionSteps', ss); }}
-                    onRemove={i => updateQ('solutionSteps', activeQuestion.solutionSteps.filter((_, j) => j !== i))}
-                    onMove={(i, dir) => { const arr = [...activeQuestion.solutionSteps], j = i + dir; if (j >= 0 && j < arr.length) { [arr[i], arr[j]] = [arr[j], arr[i]]; updateQ('solutionSteps', arr); } }}
-                    onFocus={trackFocus} />
-                ))}
-                <button
-                  onClick={() => updateQ('solutionSteps', [...activeQuestion.solutionSteps, emptyStep()])}
-                  className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#DCDCDA] text-[#787774] font-semibold text-xs hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50/50 transition-all flex items-center justify-center gap-1.5"
-                ><Plus className="w-3.5 h-3.5" /> Thêm bước giải</button>
+
+              {/* 1 ô giải chi tiết cho Trắc nghiệm */}
+              <div className="pt-3 border-t border-[#E9E9E7] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-[#787774] uppercase tracking-wider">Lời giải chi tiết</div>
+                  <span className="text-xs text-[#787774]">Hỗ trợ Text & LaTeX ($...$, $$...$$)</span>
+                </div>
+                <div className="bg-white border border-[#E9E9E7] rounded-xl p-3 shadow-sm focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-50 transition-all">
+                  <AutoResizeTextarea
+                    rows={8}
+                    className="w-full p-2 outline-none text-sm text-gray-800 font-sans leading-relaxed"
+                    style={{ minHeight: '160px' }}
+                    placeholder="Nhập hoặc dán toàn bộ lời giải chi tiết của câu trắc nghiệm vào đây... Tự động căn đều và render LaTeX!"
+                    value={activeQuestion.solution}
+                    onChange={e => updateQ('solution', e.target.value)}
+                    onFocus={e => trackFocus(`q-sol-${activeQIdx}`, e.target)}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -828,36 +867,48 @@ export default function SolutionEditor({
                     )}
 
                     {/* Preview tự luận */}
-                    {q.type === 'tu_luan' && q.steps.some((s: Step) => s.title || s.formula || s.text) && (
+                    {q.type === 'tu_luan' && (q.solution || q.steps?.some((s: Step) => s.title || s.formula || s.text)) && (
                       <div>
-                        <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-4">
+                        <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-3">
                           Lời giải chi tiết <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
                         </div>
-                        {q.steps.map((step: Step, idx: number) =>
-                          (step.title || step.formula || step.text || step.formula2)
-                            ? <StepPreview key={idx} step={step} index={idx} />
-                            : null
-                        )}
+                        <div className="bg-white border border-[#E9E9E7] rounded-xl p-4 shadow-sm text-[14px] text-gray-800 leading-relaxed">
+                          <TextWithMath text={q.solution || convertStepsToSolution(q.steps)} />
+                        </div>
                       </div>
                     )}
 
                     {/* Preview đúng/sai */}
-                    {q.type === 'dung_sai' && q.statements.some((s: Statement) => s.claim || s.claim_latex) && (
-                      <div>
-                        <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-4">
-                          Phân tích mệnh đề <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
-                        </div>
-                        {q.statements.map((st: Statement, i: number) =>
-                          (st.claim || st.claim_latex)
-                            ? <StatementPreview key={i} st={st} />
-                            : null
+                    {q.type === 'dung_sai' && (
+                      <div className="space-y-4">
+                        {q.statements.some((s: Statement) => s.claim || s.claim_latex) && (
+                          <div>
+                            <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-3">
+                              Phân tích 4 mệnh đề <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
+                            </div>
+                            {q.statements.map((st: Statement, i: number) =>
+                              (st.claim || st.claim_latex)
+                                ? <StatementPreview key={i} st={st} />
+                                : null
+                            )}
+                          </div>
+                        )}
+                        {(q.solution || q.statements.some(st => st.steps?.some(s => s.title || s.text || s.formula))) && (
+                          <div>
+                            <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-3">
+                              Hướng dẫn giải chi tiết <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
+                            </div>
+                            <div className="bg-white border border-[#E9E9E7] rounded-xl p-4 shadow-sm text-[14px] text-gray-800 leading-relaxed">
+                              <TextWithMath text={q.solution || q.statements.map(st => `**Ý ${st.label.toUpperCase()}:**\n${convertStepsToSolution(st.steps)}`).filter(s => !s.endsWith(':**\n')).join('\n\n')} />
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
 
                     {/* Preview trắc nghiệm */}
                     {q.type === 'trac_nghiem' && (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div className="space-y-1.5">
                           {['A','B','C','D'].map((lbl, ci) => q.choices?.[ci] ? (
                             <div key={lbl} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: q.correctChoice === lbl ? '#EAF3EE' : '#fff', border: `1px solid ${q.correctChoice === lbl ? '#44836150' : '#E9E9E7'}` }}>
@@ -867,16 +918,14 @@ export default function SolutionEditor({
                             </div>
                           ) : null)}
                         </div>
-                        {q.solutionSteps?.some((s: Step) => s.title || s.formula || s.text) && (
+                        {(q.solution || q.solutionSteps?.some((s: Step) => s.title || s.formula || s.text)) && (
                           <div>
                             <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-3">
-                              Lời giải <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
+                              Lời giải chi tiết <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
                             </div>
-                            {q.solutionSteps.map((step: Step, idx: number) =>
-                              (step.title || step.formula || step.text)
-                                ? <StepPreview key={idx} step={step} index={idx} />
-                                : null
-                            )}
+                            <div className="bg-white border border-[#E9E9E7] rounded-xl p-4 shadow-sm text-[14px] text-gray-800 leading-relaxed">
+                              <TextWithMath text={q.solution || convertStepsToSolution(q.solutionSteps)} />
+                            </div>
                           </div>
                         )}
                       </div>

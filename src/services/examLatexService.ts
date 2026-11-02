@@ -111,6 +111,7 @@ export interface SelectedQuestionItem {
   qText: string;
   qFormula?: string;
   type: 'trac_nghiem' | 'dung_sai' | 'tu_luan';
+  solution?: string;
   choices?: string[];
   correctChoice?: string;
   statements?: Array<{ label: string; claim: string; verdict?: boolean | null; steps?: any[] }>;
@@ -353,7 +354,14 @@ export function generateExamLatex(questions: SelectedQuestionItem[], config: Exa
       const qNum = solIdx++;
       out += `\n\\noindent \\textbf{\\color{primaryColor} ${prefix} ${qNum}:} ${q.qText || ''}\n`;
 
-      if (q.type === 'trac_nghiem' && q.solutionSteps && q.solutionSteps.length > 0) {
+      if (q.solution) {
+        out += `\noindent ${q.solution}\\[2mm]
+`;
+        if (q.type === 'trac_nghiem' && q.correctChoice) {
+          out += `\noindent $\\Rightarrow$ \textbf{Chọn đáp án ${q.correctChoice}.}\\[2mm]
+`;
+        }
+      } else if (q.type === 'trac_nghiem' && q.solutionSteps && q.solutionSteps.length > 0) {
         out += `\\begin{itemize}[leftmargin=15pt, itemsep=1mm]\n`;
         q.solutionSteps.forEach((s) => {
           if (s.title || s.text || s.formula) {
@@ -573,8 +581,10 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       bodyHtml += `
         <div style="margin-bottom: 18px; page-break-inside: avoid;">
           <div style="font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">${config.questionPrefix || 'Câu'} ${qNum}: ${q.qText || ''}</div>
-          <div style="padding-left: 12px; font-size: 11pt;">
-            ${(q.solutionSteps || q.steps || []).map(s => `
+          <div style="padding-left: 12px; font-size: 11pt; text-align: justify;">
+            ${q.solution ? `
+              <div style="margin-bottom: 6px; white-space: pre-wrap; line-height: 1.45;">${q.solution}</div>
+            ` : (q.solutionSteps || q.steps || []).map(s => `
               <div style="margin-bottom: 6px;">
                 ${s.title ? `<b>${s.title}:</b> ` : ''}${s.text || ''}
                 ${s.formula ? `<div style="text-align: center; margin: 4px 0;">$$${s.formula}$$</div>` : ''}

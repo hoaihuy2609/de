@@ -16,6 +16,7 @@ interface Question {
   question_text: string;
   question_latex: string;
   type?: 'tu_luan' | 'dung_sai' | 'trac_nghiem';
+  solution?: string;
   steps: Step[];
   statements: Statement[];
   choices?: string[];
@@ -59,6 +60,7 @@ function parseContent(content: string): { examName: string; questions: Question[
         choices:        q.choices        || [],
         correctChoice:  q.correctChoice  || '',
         solutionSteps:  q.solutionSteps  || [],
+        solution:       q.solution       || "",
       }));
     } else {
       // Backward compat: câu duy nhất ở root-level, không có `type`
@@ -69,6 +71,7 @@ function parseContent(content: string): { examName: string; questions: Question[
         type:           'tu_luan',
         steps:       data.steps || [],
         statements:  [],
+        solution:    (data as any).solution || "",
       }];
     }
 
@@ -113,16 +116,41 @@ function renderMath(text: string): React.ReactNode[] {
 
 function TextWithMath({ text }: { text: string }) {
   if (!text) return null;
+  // Tự động loại bỏ thẻ [justify] cũ, mặc định căn đều hai bên (justify) mọi thứ
+  const clean = text.replace(/\[\/?justify\]/gi, '');
+  const blocks = clean.split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\[center\][\s\S]*?\[\/center\])/g);
+
   return (
-    <>
-      {text.split(/(\[center\][\s\S]*?\[\/center\]|\[justify\][\s\S]*?\[\/justify\])/g).map((block, i) => {
-        if (block.startsWith('[center]') && block.endsWith('[/center]'))
+    <div className="space-y-2">
+      {blocks.map((block, i) => {
+        if (!block) return null;
+        if (block.startsWith('$$') && block.endsWith('$$') && block.length > 3) {
+          return <KatexBlock key={i} tex={block.slice(2, -2).trim()} />;
+        }
+        if (block.startsWith('\\[') && block.endsWith('\\]') && block.length > 3) {
+          return <KatexBlock key={i} tex={block.slice(2, -2).trim()} />;
+        }
+        if (block.startsWith('[center]') && block.endsWith('[/center]')) {
           return <div key={i} style={{ textAlign: 'center' }}>{renderMath(block.slice(8, -9))}</div>;
-        if (block.startsWith('[justify]') && block.endsWith('[/justify]'))
-          return <div key={i} style={{ textAlign: 'justify' }}>{renderMath(block.slice(9, -10))}</div>;
-        return <React.Fragment key={i}>{renderMath(block)}</React.Fragment>;
+        }
+
+        const lines = block.split('\n');
+        return (
+          <React.Fragment key={i}>
+            {lines.map((line, li) => {
+              if (!line.trim()) {
+                return li < lines.length - 1 ? <div key={li} className="h-2" /> : null;
+              }
+              return (
+                <div key={li} style={{ textAlign: 'justify', textJustify: 'inter-word' }} className="leading-relaxed">
+                  {renderMath(line)}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        );
       })}
-    </>
+    </div>
   );
 }
 
@@ -192,13 +220,19 @@ function TracNghiemRenderer({ question }: { question: Question }) {
         ) : null)}
       </div>
       {/* Lời giải */}
-      {solSteps.some(s => s.title || s.text || s.formula) && (
+      {(question.solution || solSteps.some(s => s.title || s.text || s.formula)) && (
         <div>
           <SectionLabel>Lời giải chi tiết</SectionLabel>
-          {solSteps.map((s, i) =>
-            (s.title || s.text || s.formula || s.formula2)
-              ? <StepRenderer key={i} step={s} index={i} />
-              : null
+          {question.solution ? (
+            <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+              <TextWithMath text={question.solution} />
+            </div>
+          ) : (
+            solSteps.map((s, i) =>
+              (s.title || s.text || s.formula || s.formula2)
+                ? <StepRenderer key={i} step={s} index={i} />
+                : null
+            )
           )}
         </div>
       )}
@@ -214,12 +248,18 @@ function TuLuanRenderer({ question }: { question: Question }) {
       <QuestionHeader question={question} />
 
       {/* Lời giải */}
-      {hasSteps && (
+      {(question.solution || hasSteps) && (
         <div>
           <SectionLabel>Lời giải chi tiết</SectionLabel>
-          {question.steps.map((step, idx) => (
-            <StepRenderer key={idx} step={step} index={idx} />
-          ))}
+          {question.solution ? (
+            <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+              <TextWithMath text={question.solution} />
+            </div>
+          ) : (
+            question.steps.map((step, idx) => (
+              <StepRenderer key={idx} step={step} index={idx} />
+            ))
+          )}
         </div>
       )}
     </div>
@@ -255,11 +295,21 @@ function DungSaiRenderer({ question }: { question: Question }) {
       {/* Các mệnh đề */}
       {hasStatements && (
         <div>
-          <SectionLabel>Phân tích từng mệnh đề</SectionLabel>
+          <SectionLabel>Phân tích 4 mệnh đề</SectionLabel>
           <div className="space-y-4">
             {question.statements.map((st, i) => (
               (st.claim || st.claim_latex) ? <StatementRenderer key={i} st={st} /> : null
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lời giải chi tiết chung */}
+      {question.solution && (
+        <div className="mt-6">
+          <SectionLabel>Hướng dẫn giải chi tiết</SectionLabel>
+          <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+            <TextWithMath text={question.solution} />
           </div>
         </div>
       )}
