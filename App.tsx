@@ -440,246 +440,111 @@ function BlogRoutes({ cloud }: { cloud: ReturnType<typeof useCloudStorage> }) {
 // ──────────────────────────────────────────────────────────────────
 function AppShell({ cloud }: { cloud: ReturnType<typeof useCloudStorage> }) {
   const navigate = useNavigate();
-  const { pathname: path } = useLocation(); // ✅ reactive với React Router
-  const [isSearchOpen, setSearchOpen] = useState(false);
-
-  // ── Ctrl+K / Cmd+K global shortcut for search ──
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setSearchOpen(prev => !prev);
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
+  const { pathname: path } = useLocation();
   const {
-    isSettingsOpen, setSettingsOpen, isMobileMenuOpen, setMobileMenuOpen,
-    showAdminDashboard, setShowAdminDashboard,
-    toasts, removeToast, isAdmin, previewMode, setPreviewMode,
-    isKicked, notificationUnreadCount, toggleAdmin, isSimulationFullscreen, isForumTopicActive,
+    isSettingsOpen, setSettingsOpen,
+    toasts, removeToast, isAdmin, toggleAdmin,
   } = useUIStore(useShallow(state => ({
     isSettingsOpen: state.isSettingsOpen,
     setSettingsOpen: state.setSettingsOpen,
-    isMobileMenuOpen: state.isMobileMenuOpen,
-    setMobileMenuOpen: state.setMobileMenuOpen,
     toasts: state.toasts,
     removeToast: state.removeToast,
     isAdmin: state.isAdmin,
-    previewMode: state.previewMode,
-    setPreviewMode: state.setPreviewMode,
-    isKicked: state.isKicked,
-    notificationUnreadCount: state.notificationUnreadCount,
     toggleAdmin: state.toggleAdmin,
-    isSimulationFullscreen: state.isSimulationFullscreen,
-    isForumTopicActive: state.isForumTopicActive,
   })));
-  const { curriculum, lessons, storedFiles, loading, isActivated, studentGradeValue } = useDataStore(useShallow(state => ({
-    curriculum: state.curriculum,
-    lessons: state.lessons,
-    storedFiles: state.storedFiles,
-    loading: state.loading,
-    isActivated: state.isActivated,
-    studentGradeValue: state.studentGradeValue,
-  })));
-  const { isCreatingBlog, activeAdminBlog } = useBlogStore(useShallow(state => ({
-    isCreatingBlog: state.isCreatingBlog,
-    activeAdminBlog: state.activeAdminBlog,
-  })));
-  const effectiveIsAdmin = isAdmin && !previewMode;
 
-
-  const fileCounts = useMemo(() => {
-    const counts = { [GradeLevel.Grade10]: 0, [GradeLevel.Grade11]: 0, [GradeLevel.Grade12]: 0 };
-    curriculum.forEach(grade => {
-      let c = 0;
-      grade.chapters.forEach(ch => { lessons.filter(l => l.chapterId === ch.id).forEach(l => { c += storedFiles[l.id]?.length || 0; }); });
-      counts[grade.level] = c;
-    });
-    return counts;
-  }, [curriculum, storedFiles, lessons]);
-
-  const handlePreviewMode = useCallback((mode: GradeLevel | null) => {
-    setPreviewMode(mode);
-    navigate(mode ? `/grade/${mode}` : '/');
-  }, [setPreviewMode, navigate]);
-
-  const urlGradeMatch = path.match(/\/grade\/(\d+)/);
-  const currentGradeFromUrl = urlGradeMatch ? (Number(urlGradeMatch[1]) as GradeLevel) : null;
-  const isOnHome = path === '/';
-  const isOnGrade = path.startsWith('/grade/');
-  const isOnExams = path.startsWith('/exams');
-  const isOnNotification = path === '/notifications';
-  const isOnSimLab = path === '/lab';
-  const isOnCommunity = path.startsWith('/community');
-  const isOnGame = path.startsWith('/game');
-  const isOnLive = path === '/live';
-
-  // Game sub-state (only TheoryKing remains)
-  const resetGames = useCallback(() => {}, []);
-
-  const hideSidebar = isSimulationFullscreen || isForumTopicActive || path === '/admin/editor' || path === '/admin' || path === '/live' || (effectiveIsAdmin && (isCreatingBlog || !!activeAdminBlog));
-
-  if (isKicked && !isAdmin) return <KickedScreen />;
-
-  const sidebarCommonProps = {
-    currentGrade: currentGradeFromUrl,
-    onSelectGrade: (g: GradeLevel | null) => navigate(g ? `/grade/${g}` : '/'),
-    onOpenSettings: () => setSettingsOpen(true),
-    onOpenExamList: (isActivated || isAdmin) ? () => navigate('/exams') : undefined,
-    onOpenContactBook: (isActivated || isAdmin) ? () => navigate('/contact-book') : undefined,
-    onOpenStudyPlanner: (isActivated || isAdmin) ? () => navigate('/planner') : undefined,
-    onOpenNotification: (isActivated || isAdmin) ? () => navigate('/notifications') : undefined,
-    onOpenSimLab: (isActivated || isAdmin) ? () => navigate('/lab') : undefined,
-    onOpenBlog: (isActivated || isAdmin) ? () => navigate('/blog') : undefined,
-    onOpenCommunity: (isActivated || isAdmin) ? () => navigate('/community') : undefined,
-    onOpenGame: (isActivated || isAdmin) ? () => { navigate('/game'); resetGames(); } : undefined,
-    onOpenLive: (isActivated || isAdmin) ? () => navigate('/live') : undefined,
-    showExamList: isOnExams,
-    showContactBook: path === '/contact-book',
-    showStudyPlanner: path === '/planner',
-    showNotification: isOnNotification,
-    notificationUnreadCount,
-    showSimLab: isOnSimLab,
-    showBlog: path.startsWith('/blog'),
-    showCommunity: isOnCommunity,
-    showGame: isOnGame,
-    showLive: isOnLive,
-    isAdmin,
-    previewMode,
-    onSetPreviewMode: handlePreviewMode,
-    studentGrade: studentGradeValue,
-    onOpenSearch: (isActivated || isAdmin) ? () => setSearchOpen(true) : undefined,
-    onOpenSolutionEditor: effectiveIsAdmin ? () => navigate('/admin/editor') : undefined,
-  };
+  // Tự động kích hoạt quyền Admin trên Studio nếu chưa bật
+  useEffect(() => {
+    if (!isAdmin) {
+      toggleAdmin();
+    }
+  }, []);
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: isForumTopicActive ? '#FFFFFF' : '#F7F6F3', color: '#1A1A1A' }}>
-      {isMobileMenuOpen && <div className="fixed inset-0 z-40 md:hidden" style={{ background: 'rgba(26,26,26,0.4)' }} onClick={() => setMobileMenuOpen(false)} />}
+    <div className="min-h-screen font-sans flex flex-col bg-[#F7F6F3] text-[#1A1A1A]">
+      {/* Top Header cho Studio */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-6 border-b border-[#E9E9E7] bg-white/95 backdrop-blur-md h-16 shadow-xs">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-600 shadow-sm">
+            <Atom className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="font-bold text-base text-gray-900 tracking-tight leading-none">PhysiVault Studio</div>
+            <div className="text-[11px] text-gray-500 font-medium mt-0.5">Góc Học Tập & Ngân Hàng Đề Thi Trực Tuyến</div>
+          </div>
+        </div>
 
-      {/* Mobile Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 shadow-xl transform transition-transform duration-300 ease-out md:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ background: '#F1F0EC', borderRight: '1px solid #E9E9E7' }}>
-        <Sidebar {...sidebarCommonProps} onSelectGrade={(g) => { navigate(g ? `/grade/${g}` : '/'); setMobileMenuOpen(false); }} onOpenSettings={() => { setSettingsOpen(true); setMobileMenuOpen(false); }} onOpenExamList={(isActivated || isAdmin) ? () => { navigate('/exams'); setMobileMenuOpen(false); } : undefined} onOpenContactBook={(isActivated || isAdmin) ? () => { navigate('/contact-book'); setMobileMenuOpen(false); } : undefined} onOpenStudyPlanner={(isActivated || isAdmin) ? () => { navigate('/planner'); setMobileMenuOpen(false); } : undefined} onOpenNotification={(isActivated || isAdmin) ? () => { navigate('/notifications'); setMobileMenuOpen(false); } : undefined} onOpenSimLab={(isActivated || isAdmin) ? () => { navigate('/lab'); setMobileMenuOpen(false); } : undefined} onOpenBlog={(isActivated || isAdmin) ? () => { navigate('/blog'); setMobileMenuOpen(false); } : undefined} onOpenCommunity={(isActivated || isAdmin) ? () => { navigate('/community'); setMobileMenuOpen(false); } : undefined} onOpenGame={(isActivated || isAdmin) ? () => { navigate('/game'); setMobileMenuOpen(false); resetGames(); } : undefined} onOpenLive={(isActivated || isAdmin) ? () => { navigate('/live'); setMobileMenuOpen(false); } : undefined} showLive={isOnLive} className="w-full" />
-      </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/editor')}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" /> Soạn bài mới (LaTeX)
+          </button>
 
-      {/* Desktop Sidebar */}
-      {!hideSidebar && <Sidebar {...sidebarCommonProps} className="hidden md:flex" />}
+          <button
+            onClick={() => toggleAdmin()}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${isAdmin ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
+          >
+            {isAdmin ? '✓ Quyền Biên Soạn (Admin)' : '👁 Chế độ Học sinh'}
+          </button>
+
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+            title="Cài đặt & Đồng bộ"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
 
       {/* Settings Modal */}
       <ErrorBoundary>
         <Suspense fallback={null}>
-          <SettingsModal isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} onShowToast={useUIStore.getState().showToast} isAdmin={isAdmin} isActivated={isActivated} lessons={lessons} storedFiles={storedFiles} onActivateSystem={cloud.activateSystem} onFetchLessons={cloud.fetchLessonsFromCloud} onToggleAdmin={toggleAdmin} onOpenDashboard={() => { navigate('/admin'); setSettingsOpen(false); }} onLoadExams={cloud.loadExams} />
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            onShowToast={useUIStore.getState().showToast}
+            isAdmin={true}
+            isActivated={true}
+            lessons={[]}
+            storedFiles={{}}
+            onActivateSystem={cloud.activateSystem}
+            onFetchLessons={cloud.fetchLessonsFromCloud}
+            onToggleAdmin={toggleAdmin}
+            onOpenDashboard={() => setSettingsOpen(false)}
+            onLoadExams={cloud.loadExams}
+          />
         </Suspense>
       </ErrorBoundary>
 
-      {/* Main Content */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 relative ${hideSidebar ? '' : 'md:ml-64'}`}>
-        {/* Mobile Header: Hamburger | Logo | Bell */}
-        <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4" style={{ background: '#F1F0EC', borderBottom: '1px solid #E9E9E7', height: '52px' }}>
-          {/* Hamburger */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
-            style={{ color: '#57564F' }}
-            aria-label="Mở menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          {/* Logo giữa */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: '#6B7CDB' }}>
-              <Atom className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-semibold text-sm" style={{ color: '#1A1A1A' }}>PhysiVault</span>
-          </div>
-
-          {/* Bell với badge thông báo */}
-          <button
-            onClick={() => navigate('/notifications')}
-            className="relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors"
-            style={{ color: isOnNotification ? '#E03E3E' : '#57564F' }}
-            aria-label="Thông báo"
-          >
-            <Bell className="w-5 h-5" />
-            {notificationUnreadCount > 0 && (
-              <span
-                className="absolute top-1 right-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-black"
-                style={{ background: '#E03E3E', color: '#fff', lineHeight: 1 }}
-              >
-                {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
-              </span>
-            )}
-          </button>
-        </header>
-
-        <main className={`flex-1 p-4 md:p-8 lg:p-10 pb-10 mx-auto w-full ${hideSidebar ? 'max-w-[1920px] px-4 md:px-8 lg:px-12' : 'max-w-7xl'}`}>
-          <Routes>
-            <Route path="/" element={
-              loading
-                ? <div className="flex items-center justify-center h-[50vh]"><RefreshCw className="w-10 h-10 animate-spin" style={{ color: '#6B7CDB' }} /><span className="ml-3 text-lg font-medium" style={{ color: '#6B7CDB' }}>từ từ nó đang load...</span></div>
-                : <Dashboard onSelectGrade={(g) => navigate(g ? `/grade/${g}` : '/')} fileCounts={fileCounts} isAdmin={effectiveIsAdmin} onLoadLeaderboard={cloud.getLeaderboard} previewMode={previewMode} studentGrade={studentGradeValue} getBlogs={cloud.getBlogs} curriculum={curriculum} />
-            } />
-            <Route path="/admin" element={
-              effectiveIsAdmin ? (
-                <ErrorBoundary>
-                  <Suspense fallback={<LazyFallback />}>
-                    <AdminDashboard onBack={() => navigate('/')} onShowToast={useUIStore.getState().showToast} onUploadExamPdf={cloud.uploadExamPdf} onSaveExam={cloud.saveExam} onDeleteExam={cloud.deleteExam} onLoadExams={cloud.loadExams} curriculum={curriculum} lessons={lessons} storedFiles={storedFiles} onDeleteChapter={async (grade, chapter) => cloud.deleteChapter(grade, chapter.id)} onAddLesson={cloud.addLesson} onDeleteLesson={cloud.deleteLesson} onUploadFiles={cloud.uploadFiles} onDeleteFile={cloud.deleteFile} onSyncToGitHub={cloud.syncToCloud} syncProgress={cloud.syncProgress} />
-                  </Suspense>
-                </ErrorBoundary>
-              ) : <Navigate to="/" replace />
-            } />
-            <Route path="/grade/:level" element={<GradeOverviewPage cloud={cloud} />} />
-            <Route path="/grade/:level/chapter/:chapterId" element={<ChapterPage cloud={cloud} />} />
-            <Route path="/grade/:level/chapter/:chapterId/lesson/:lessonId" element={<LessonPage cloud={cloud} />} />
-            <Route path="/exams" element={<ExamRoutes cloud={cloud} />} />
-            <Route path="/contact-book" element={<ErrorBoundary><Suspense fallback={<LazyFallback />}><ContactBook isAdmin={effectiveIsAdmin} onLoadHistory={cloud.getExamHistory} /></Suspense></ErrorBoundary>} />
-            <Route path="/planner" element={<ErrorBoundary><Suspense fallback={<LazyFallback />}><StudyPlanner isAdmin={effectiveIsAdmin} studentGrade={studentGradeValue} onLoadPlans={cloud.getStudyPlans} onSavePlan={cloud.saveStudyPlan} onUpdatePlan={cloud.updateStudyPlan} onDeletePlan={cloud.deleteStudyPlan} onLoadSchedules={cloud.getSchedules} onLoadAllSchedules={cloud.getAllSchedules} onSaveSchedule={cloud.saveSchedule} onUpdateSchedule={cloud.updateSchedule} onDeleteSchedule={cloud.deleteSchedule} /></Suspense></ErrorBoundary>} />
-            <Route path="/notifications" element={<ErrorBoundary><Suspense fallback={<LazyFallback />}><NotificationPage onGetNotifications={cloud.getNotifications} onGetFetchedIds={cloud.getFetchedNotificationIds} onMarkFetched={cloud.markNotificationFetched} onFetchLessons={cloud.fetchLessonsFromCloud} onShowToast={useUIStore.getState().showToast} isAdmin={effectiveIsAdmin} onDeleteNotification={cloud.deleteNotification} onCreateNotification={cloud.createCustomNotification} /></Suspense></ErrorBoundary>} />
-            <Route path="/lab" element={<ErrorBoundary><Suspense fallback={<LazyFallback />}><SimulationLab onBack={() => navigate('/')} /></Suspense></ErrorBoundary>} />
-            <Route path="/blog/*" element={<BlogRoutes cloud={cloud} />} />
-            <Route path="/community" element={<ErrorBoundary><Suspense fallback={<LazyFallback />}><CommunityPage isAdmin={effectiveIsAdmin} /></Suspense></ErrorBoundary>} />
-            <Route path="/game" element={
-              <ErrorBoundary><Suspense fallback={<LazyFallback />}>
-                <TheoryKing onBack={() => navigate('/')} workerUrl={import.meta.env.VITE_COMMENT_WORKER_URL} studentGrade={studentGradeValue} />
-              </Suspense></ErrorBoundary>
-            } />
-            <Route path="/live" element={
-              <ErrorBoundary><Suspense fallback={<LazyFallback />}>
-                <LivePage studentPhone={getActivatedPhone()} studentGrade={studentGradeValue} isAdmin={effectiveIsAdmin} onBack={() => navigate('/')} />
-              </Suspense></ErrorBoundary>
-            } />
-            <Route path="/admin/editor" element={effectiveIsAdmin ? <ErrorBoundary><Suspense fallback={<LazyFallback />}><SolutionEditor /></Suspense></ErrorBoundary> : <Navigate to="/" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-      </div>
+      {/* Main Content: 100% dành cho Góc học tập & Soạn đề */}
+      <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 lg:p-10">
+        <Routes>
+          <Route path="/" element={<BlogRoutes cloud={cloud} />} />
+          <Route path="/blog/*" element={<BlogRoutes cloud={cloud} />} />
+          <Route path="/admin/editor" element={
+            <ErrorBoundary>
+              <Suspense fallback={<LazyFallback />}>
+                <SolutionEditor onBack={() => navigate('/')} />
+              </Suspense>
+            </ErrorBoundary>
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
 
       {/* Toasts */}
       <div className="fixed bottom-0 right-0 p-4 space-y-2 z-50">
-        {toasts.map(t => <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />)}
+        {toasts.map(t => (
+          <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />
+        ))}
       </div>
-
-
-
-      {isOnHome && !isActivated && !isAdmin && (
-        <ErrorBoundary><Suspense fallback={null}><Chatbot /></Suspense></ErrorBoundary>
-      )}
-
-      {/* Global Search (Ctrl+K) */}
-      <ErrorBoundary>
-        <Suspense fallback={null}>
-          <GlobalSearch isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} onLoadExams={cloud.loadExams} onGetBlogs={cloud.getBlogs} isAdmin={effectiveIsAdmin} />
-        </Suspense>
-      </ErrorBoundary>
     </div>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────
-// Root
-// ──────────────────────────────────────────────────────────────────
 function App() {
   const cloud = useCloudStorage();
   
