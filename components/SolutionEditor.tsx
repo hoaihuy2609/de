@@ -67,7 +67,7 @@ const normalizeQuestion = (q: any): Question => ({
   statements: q.statements?.length > 0
     ? q.statements
     : STMT_LABELS.map(emptyStatement),
-  choices: q.choices?.length === 4 ? q.choices : ['', '', '', ''],
+  choices: Array.isArray(q.choices) ? [0, 1, 2, 3].map(i => q.choices[i] || '') : ['', '', '', ''],
   correctChoice: q.correctChoice || '',
   solutionSteps: q.solutionSteps?.length > 0 ? q.solutionSteps : [emptyStep()],
 });
