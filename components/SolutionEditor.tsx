@@ -348,7 +348,7 @@ export default function SolutionEditor({
   const [saving,     setSaving]     = useState(false);
 
   const [category,     setCategory]     = useState("");
-  const [tags,         setTags]         = useState<string[]>([]);
+  const [level,        setLevel]        = useState(0);
   const [isPublished,  setIsPublished]  = useState(false);
   const [grade,        setGrade]        = useState(0);
 
@@ -376,7 +376,7 @@ export default function SolutionEditor({
   useEffect(() => {
     if (!blog) return;
     setCategory(blog.category || "");
-    setTags(blog.tags || []);
+    setLevel(blog.level || 0);
     setIsPublished(!!blog.is_published);
     setGrade(blog.grade || 0);
 
@@ -500,7 +500,8 @@ export default function SolutionEditor({
         content: JSON.stringify(solutionData),
         category: category || 'Lời giải',
         is_published: isPublished,
-        tags,
+        tags: [],
+        level,
         grade,
       };
 
@@ -604,11 +605,23 @@ export default function SolutionEditor({
             <datalist id="sol-cat-list">{CATEGORIES.map(c => <option key={c} value={c} />)}</datalist>
           </div>
           <div className="hidden md:block w-px h-6 bg-[#E9E9E7]" />
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-xs font-bold text-[#AEACA8] uppercase shrink-0">Thẻ</span>
-            <input type="text" placeholder="vatly12, dongdien..."
-              className="w-full p-2.5 rounded-lg border border-[#E9E9E7] outline-none focus:border-indigo-500 text-sm font-medium"
-              value={tags.join(', ')} onChange={e => setTags(e.target.value.split(',').map(t => t.trim()).filter(Boolean))} />
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-bold text-[#AEACA8] uppercase">Mức độ</span>
+            <div className="flex bg-[#F7F6F3] p-1 rounded-lg border border-[#E9E9E7]">
+              {[
+                { val: 0, lab: '—', col: '#AEACA8' },
+                { val: 1, lab: 'Mức 1', col: '#448361' },
+                { val: 2, lab: 'Mức 2', col: '#6B7CDB' },
+                { val: 3, lab: 'Mức 3', col: '#D9730D' },
+                { val: 4, lab: 'Mức 4', col: '#9065B0' },
+              ].map(m => (
+                <button key={m.val} type="button" onClick={() => setLevel(m.val)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md transition-all"
+                  style={{ background: level === m.val ? m.col : 'transparent', color: level === m.val ? '#fff' : '#787774' }}>
+                  {m.lab}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

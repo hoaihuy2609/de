@@ -174,15 +174,23 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
 
                 {/* Bên phải: Mức độ (placeholder) + Thêm + Admin status */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {/* Mức độ — placeholder cho Bước 2 */}
-                    <span style={{
-                        fontSize: '10px', fontWeight: 700,
-                        padding: '2px 8px', borderRadius: '5px',
-                        background: '#F1F0EC', color: '#AEACA8',
-                        border: '1px solid #E2E1DD',
-                    }}>
-                        Mức —
-                    </span>
+                    {/* Mức độ thực tế */}
+                    {(() => {
+                        const lvlMap: Record<number, {label:string;bg:string;color:string;brd:string}> = {
+                            1:{label:'Mức 1',bg:'#EAF3EE',color:'#448361',brd:'#44836130'},
+                            2:{label:'Mức 2',bg:'#EEF0FB',color:'#6B7CDB',brd:'#6B7CDB30'},
+                            3:{label:'Mức 3',bg:'#FFF3E8',color:'#D9730D',brd:'#D9730D30'},
+                            4:{label:'Mức 4',bg:'#F3ECF8',color:'#9065B0',brd:'#9065B030'},
+                        };
+                        const lv = (blog as any).level || 0;
+                        const s = lvlMap[lv];
+                        return <span style={{
+                            fontSize:'10px',fontWeight:700,
+                            padding:'2px 8px',borderRadius:'5px',
+                            background:s?.bg||'#F1F0EC',color:s?.color||'#AEACA8',
+                            border:`1px solid ${s?.brd||'#E2E1DD'}`,
+                        }}>{s?.label||'Mức —'}</span>;
+                    })()}
 
                     {/* Nút Thêm — chức năng code sau */}
                     <button

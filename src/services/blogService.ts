@@ -104,7 +104,7 @@ export const saveBlog = async (blog: Partial<BlogPost>): Promise<BlogPost | null
                 title: blog.title || '', summary: blog.summary || '', content: blog.content || '',
                 cover_image: blog.cover_image || '', category: blog.category || '',
                 tags: blog.tags || [], is_published: blog.is_published || false,
-                grade: blog.grade ?? 0,
+                grade: blog.grade ?? 0, level: blog.level ?? 0,
                 created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
             localBlogs.unshift(saved);
