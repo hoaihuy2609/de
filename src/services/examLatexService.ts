@@ -448,14 +448,14 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
     <!-- HEADER ĐỀ THI -->
     <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 24px;">
       <div style="text-align: center; width: 45%;">
-        <div style="font-weight: bold; font-size: 11pt; text-transform: uppercase;">${config.headerTitle}</div>
-        <div style="font-size: 10.5pt; font-weight: bold;">${config.schoolName}</div>
+        <div style="font-weight: bold; font-size: 10.5pt; text-transform: uppercase;">${config.headerTitle}</div>
+        <div style="font-size: 10pt; font-weight: bold;">${config.schoolName}</div>
         <div style="margin-top: 4px; font-size: 9.5pt;">Mã đề thi: <b>${config.examCode}</b></div>
       </div>
       <div style="text-align: center; width: 50%;">
-        <div style="font-weight: bold; font-size: 13pt; text-transform: uppercase; color: ${primaryColor};">${config.examName}</div>
-        <div style="font-size: 10.5pt;">Môn thi: <b>${config.subject.toUpperCase()}</b></div>
-        <div style="font-size: 10pt; font-style: italic;">Thời gian làm bài: ${config.duration} phút</div>
+        <div style="font-weight: bold; font-size: 11.5pt; text-transform: uppercase; color: ${primaryColor};">${config.examName}</div>
+        <div style="font-size: 10pt;">Môn thi: <b>${config.subject.toUpperCase()}</b></div>
+        <div style="font-size: 9.5pt; font-style: italic;">Thời gian làm bài: ${config.duration} phút</div>
       </div>
     </div>
   `;
@@ -466,7 +466,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       bodyHtml += `
         <div style="margin: 16px 0 10px 0;">
           <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.choice4Title}</div>
-          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.choice4Note}</div>
+          <div style="font-size: 9.5pt; font-style: italic; color: #555;">${config.choice4Note}</div>
         </div>
       `;
     }
@@ -479,7 +479,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
 
       bodyHtml += `
         <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
-          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          <div><b style="font-weight: 700;">${config.questionPrefix || 'Câu'} ${qNum}:</b> <span style="font-weight: 400;">${q.qText || ''}</span></div>
           ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
           <div style="display: grid; grid-template-columns: ${cols}; gap: 6px 16px; margin-top: 8px;">
             <div><b>A.</b> ${choices[0] || ''}</div>
@@ -498,7 +498,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       bodyHtml += `
         <div style="margin: 20px 0 10px 0; page-break-before: auto;">
           <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.trueFalseTitle}</div>
-          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.trueFalseNote}</div>
+          <div style="font-size: 9.5pt; font-style: italic; color: #555;">${config.trueFalseNote}</div>
         </div>
       `;
     }
@@ -507,7 +507,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       const qNum = qCount++;
       bodyHtml += `
         <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
-          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          <div><b style="font-weight: 700;">${config.questionPrefix || 'Câu'} ${qNum}:</b> <span style="font-weight: 400;">${q.qText || ''}</span></div>
           ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
           <div style="margin-top: 6px; padding-left: 12px; display: flex; flex-direction: column; gap: 4px;">
             ${(q.statements || []).map(st => `<div><b>${st.label})</b> ${st.claim || ''}</div>`).join('')}
@@ -523,7 +523,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       bodyHtml += `
         <div style="margin: 20px 0 10px 0;">
           <div style="font-weight: bold; font-size: 12pt; color: ${primaryColor};">${config.essayTitle}</div>
-          <div style="font-size: 10pt; font-style: italic; color: #555;">${config.essayNote}</div>
+          <div style="font-size: 9.5pt; font-style: italic; color: #555;">${config.essayNote}</div>
         </div>
       `;
     }
@@ -532,7 +532,7 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
       const qNum = qCount++;
       bodyHtml += `
         <div style="margin-bottom: 16px; page-break-inside: avoid; text-align: justify;">
-          <div><b>${config.questionPrefix || 'Câu'} ${qNum}:</b> ${q.qText || ''}</div>
+          <div><b style="font-weight: 700;">${config.questionPrefix || 'Câu'} ${qNum}:</b> <span style="font-weight: 400;">${q.qText || ''}</span></div>
           ${q.qFormula ? `<div style="text-align: center; margin: 6px 0;">$$${q.qFormula}$$</div>` : ''}
         </div>
       `;
@@ -597,19 +597,39 @@ export function printExamDirectlyToPdf(questions: SelectedQuestionItem[], config
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4; margin: 18mm 15mm 18mm 15mm; }
-    * { box-sizing: border-box; }
+    @page {
+      size: A4;
+      margin: 16mm 14mm 16mm 14mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
     body {
-      font-family: 'KaTeX_Main', 'Computer Modern', 'Times New Roman', serif;
-      font-size: 12pt;
-      line-height: 1.45;
-      color: #111;
+      font-family: 'Times New Roman', 'Lora', serif;
+      font-size: 11pt;
+      font-weight: 400;
+      line-height: 1.35;
+      color: #1A1A1A;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       margin: 0;
       padding: 15px;
     }
+    .katex {
+      font-weight: normal !important;
+      font-size: 1.03em !important;
+    }
+    .katex-display {
+      margin: 5px 0 !important;
+    }
     @media print {
-      body { padding: 0; }
+      body {
+        padding: 0;
+      }
     }
   </style>
 </head>
