@@ -125,29 +125,105 @@ function KatexSpan({ tex, block = false }: { tex: string; block?: boolean }) {
     : <span ref={ref as React.RefObject<HTMLSpanElement>} />;
 }
 
-const renderMath = (text: string) =>
-  text.split(/(\$[^$]+\$|\\\([\s\S]*?\\\))/g).map((part, i) => {
-    if (part.startsWith('$') && part.endsWith('$') && part.length > 1)
-      return <KatexSpan key={i} tex={part.slice(1, -1)} />;
-    if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 3)
-      return <KatexSpan key={i} tex={part.slice(2, -2)} />;
+const renderInlineMath = (text: string) =>
+  text.split(/(\$(?!\$)[^$\n]+(?<!\$)\$|\\\([\s\S]*?\\\))/g).map((part, i) => {
+    if (part.startsWith('$') && part.endsWith('$') && part.length > 2 && !part.startsWith('$$')) {
+      return <KatexSpan key={i} tex={part.slice(1, -1).trim()} block={false} />;
+    }
+    if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 3) {
+      return <KatexSpan key={i} tex={part.slice(2, -2).trim()} block={false} />;
+    }
     return <span key={i}>{part}</span>;
   });
 
 function TextWithMath({ text }: { text: string }) {
   if (!text) return null;
-  return (
-    <>
-      {text.split(/(\[center\][\s\S]*?\[\/center\]|\[justify\][\s\S]*?\[\/justify\])/g).map((block, i) => {
-        if (block.startsWith('[center]') && block.endsWith('[/center]'))
-          return <div key={i} style={{ textAlign: 'center' }}>{renderMath(block.slice(8, -9))}</div>;
-        if (block.startsWith('[justify]') && block.endsWith('[/justify]'))
-          return <div key={i} style={{ textAlign: 'justify' }}>{renderMath(block.slice(9, -10))}</div>;
-        return renderMath(block);
-      })}
-    </>
-  );
+  const clean = text.replace(/\[\/?justify\]/gi, '');
+  const rawLines = clean.split('\n');
+
+  const elements: React.ReactNode[] = [];
+  let inBlockMath = false;
+  let blockMathBuffer: string[] = [];
+
+  for (let idx = 0; idx < rawLines.length; idx++) {
+    const line = rawLines[idx];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      if (!inBlockMath) {
+        elements.push(<div key={`empty-${idx}`} className="h-2" />);
+      }
+      continue;
+    }
+
+    // Dòng chứa công thức độc lập $$...$$ (căn giữa 100%, đứng riêng một dòng)
+    if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length > 3) {
+      const tex = trimmed.slice(2, -2).trim();
+      elements.push(
+        <div key={`bm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+          <KatexSpan tex={tex} block />
+        </div>
+      );
+      continue;
+    }
+
+    // Dòng chứa công thức độc lập \[...\]
+    if (trimmed.startsWith('\\[') && trimmed.endsWith('\\]') && trimmed.length > 3) {
+      const tex = trimmed.slice(2, -2).trim();
+      elements.push(
+        <div key={`bm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+          <KatexSpan tex={tex} block />
+        </div>
+      );
+      continue;
+    }
+
+    // Multi-line block math bắt đầu bằng $$
+    if (trimmed.startsWith('$$')) {
+      inBlockMath = true;
+      blockMathBuffer = [trimmed.slice(2)];
+      continue;
+    }
+
+    if (inBlockMath) {
+      if (trimmed.endsWith('$$')) {
+        blockMathBuffer.push(trimmed.slice(0, -2));
+        const tex = blockMathBuffer.join('\n').trim();
+        elements.push(
+          <div key={`bmm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+            <KatexSpan tex={tex} block />
+          </div>
+        );
+        blockMathBuffer = [];
+        inBlockMath = false;
+      } else {
+        blockMathBuffer.push(line);
+      }
+      continue;
+    }
+
+    // Thẻ [center]...[/center]
+    if (trimmed.startsWith('[center]') && trimmed.endsWith('[/center]')) {
+      const inner = trimmed.slice(8, -9);
+      elements.push(
+        <div key={`c-${idx}`} className="my-1 text-center">
+          {renderInlineMath(inner)}
+        </div>
+      );
+      continue;
+    }
+
+    // Dòng văn bản bình thường (tự động căn đều 2 bên mép, công thức $...$ nằm gọn gàng)
+    elements.push(
+      <div key={`t-${idx}`} style={{ textAlign: 'justify', textJustify: 'inter-word' }} className="leading-relaxed my-0.5">
+        {renderInlineMath(line)}
+      </div>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
 }
+
 
 function AutoResizeTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const ref = useRef<HTMLTextAreaElement>(null);

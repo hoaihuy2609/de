@@ -104,54 +104,104 @@ function KatexInline({ tex }: { tex: string }) {
   return <span ref={ref} />;
 }
 
-function renderMath(text: string): React.ReactNode[] {
-  return text.split(/(\$[^$]+\$|\\\([\s\S]*?\\\))/g).map((part, i) => {
-    if (part.startsWith('$') && part.endsWith('$') && part.length > 1)
-      return <KatexInline key={i} tex={part.slice(1, -1)} />;
-    if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 3)
-      return <KatexInline key={i} tex={part.slice(2, -2)} />;
+function renderInlineMath(text: string): React.ReactNode[] {
+  return text.split(/(\$(?!\$)[^$\n]+(?<!\$)\$|\\\([\s\S]*?\\\))/g).map((part, i) => {
+    if (part.startsWith('$') && part.endsWith('$') && part.length > 2 && !part.startsWith('$$')) {
+      return <KatexInline key={i} tex={part.slice(1, -1).trim()} />;
+    }
+    if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 3) {
+      return <KatexInline key={i} tex={part.slice(2, -2).trim()} />;
+    }
     return <span key={i}>{part}</span>;
   });
 }
 
 function TextWithMath({ text }: { text: string }) {
   if (!text) return null;
-  // Tự động loại bỏ thẻ [justify] cũ, mặc định căn đều hai bên (justify) mọi thứ
   const clean = text.replace(/\[\/?justify\]/gi, '');
-  const blocks = clean.split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\[center\][\s\S]*?\[\/center\])/g);
+  const rawLines = clean.split('\n');
 
-  return (
-    <div className="space-y-2">
-      {blocks.map((block, i) => {
-        if (!block) return null;
-        if (block.startsWith('$$') && block.endsWith('$$') && block.length > 3) {
-          return <KatexBlock key={i} tex={block.slice(2, -2).trim()} />;
-        }
-        if (block.startsWith('\\[') && block.endsWith('\\]') && block.length > 3) {
-          return <KatexBlock key={i} tex={block.slice(2, -2).trim()} />;
-        }
-        if (block.startsWith('[center]') && block.endsWith('[/center]')) {
-          return <div key={i} style={{ textAlign: 'center' }}>{renderMath(block.slice(8, -9))}</div>;
-        }
+  const elements: React.ReactNode[] = [];
+  let inBlockMath = false;
+  let blockMathBuffer: string[] = [];
 
-        const lines = block.split('\n');
-        return (
-          <React.Fragment key={i}>
-            {lines.map((line, li) => {
-              if (!line.trim()) {
-                return li < lines.length - 1 ? <div key={li} className="h-2" /> : null;
-              }
-              return (
-                <div key={li} style={{ textAlign: 'justify', textJustify: 'inter-word' }} className="leading-relaxed">
-                  {renderMath(line)}
-                </div>
-              );
-            })}
-          </React.Fragment>
+  for (let idx = 0; idx < rawLines.length; idx++) {
+    const line = rawLines[idx];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      if (!inBlockMath) {
+        elements.push(<div key={`empty-${idx}`} className="h-2" />);
+      }
+      continue;
+    }
+
+    // Dòng chứa công thức độc lập $$...$$ (căn giữa 100%, đứng riêng một dòng)
+    if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length > 3) {
+      const tex = trimmed.slice(2, -2).trim();
+      elements.push(
+        <div key={`bm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+          <KatexBlock tex={tex} />
+        </div>
+      );
+      continue;
+    }
+
+    // Dòng chứa công thức độc lập \[...\]
+    if (trimmed.startsWith('\\[') && trimmed.endsWith('\\]') && trimmed.length > 3) {
+      const tex = trimmed.slice(2, -2).trim();
+      elements.push(
+        <div key={`bm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+          <KatexBlock tex={tex} />
+        </div>
+      );
+      continue;
+    }
+
+    // Multi-line block math bắt đầu bằng $$
+    if (trimmed.startsWith('$$')) {
+      inBlockMath = true;
+      blockMathBuffer = [trimmed.slice(2)];
+      continue;
+    }
+
+    if (inBlockMath) {
+      if (trimmed.endsWith('$$')) {
+        blockMathBuffer.push(trimmed.slice(0, -2));
+        const tex = blockMathBuffer.join('\n').trim();
+        elements.push(
+          <div key={`bmm-${idx}`} className="my-2.5 text-center overflow-x-auto">
+            <KatexBlock tex={tex} />
+          </div>
         );
-      })}
-    </div>
-  );
+        blockMathBuffer = [];
+        inBlockMath = false;
+      } else {
+        blockMathBuffer.push(line);
+      }
+      continue;
+    }
+
+    // Thẻ [center]...[/center]
+    if (trimmed.startsWith('[center]') && trimmed.endsWith('[/center]')) {
+      const inner = trimmed.slice(8, -9);
+      elements.push(
+        <div key={`c-${idx}`} className="my-1 text-center">
+          {renderInlineMath(inner)}
+        </div>
+      );
+      continue;
+    }
+
+    // Dòng văn bản bình thường (tự động căn đều 2 bên mép, công thức $...$ nằm gọn gàng)
+    elements.push(
+      <div key={`t-${idx}`} style={{ textAlign: 'justify', textJustify: 'inter-word' }} className="leading-relaxed my-0.5">
+        {renderInlineMath(line)}
+      </div>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
 }
 
 // ─────────────────────────────────────────────────────────────
