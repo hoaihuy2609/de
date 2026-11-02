@@ -858,7 +858,7 @@ export default function SolutionEditor({
                           {['A','B','C','D'].map((lbl, ci) => q.choices?.[ci] ? (
                             <div key={lbl} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: q.correctChoice === lbl ? '#EAF3EE' : '#fff', border: `1px solid ${q.correctChoice === lbl ? '#44836150' : '#E9E9E7'}` }}>
                               <span className="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0" style={{ background: q.correctChoice === lbl ? '#448361' : '#F1F0EC', color: q.correctChoice === lbl ? '#fff' : '#787774' }}>{lbl}</span>
-                              <span className="text-[13px] text-[#1A1A1A]">{q.choices[ci]}</span>
+                              <span className="text-[13px] text-[#1A1A1A]"><TextWithMath text={q.choices[ci]} /></span>
                               {q.correctChoice === lbl && <span className="ml-auto text-xs font-bold text-emerald-600">✓ Đúng</span>}
                             </div>
                           ) : null)}

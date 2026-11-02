@@ -15,9 +15,12 @@ interface Question {
   question_no: string;
   question_text: string;
   question_latex: string;
-  type?: 'tu_luan' | 'dung_sai';
+  type?: 'tu_luan' | 'dung_sai' | 'trac_nghiem';
   steps: Step[];
   statements: Statement[];
+  choices?: string[];
+  correctChoice?: string;
+  solutionSteps?: Step[];
 }
 
 interface PhysicsSolutionData {
@@ -151,6 +154,55 @@ function StepRenderer({ step, index }: { step: Step; index: number }) {
 // ─────────────────────────────────────────────────────────────
 // TỰ LUẬN RENDERER
 // ─────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// TRẮC NGHIỆM RENDERER
+// ──────────────────────────────────────────────────────────────
+function TracNghiemRenderer({ question }: { question: Question }) {
+  const choices  = question.choices  || [];
+  const correct  = question.correctChoice || '';
+  const solSteps = question.solutionSteps || [];
+  return (
+    <div className="space-y-5">
+      <QuestionHeader question={question} />
+      {/* 4 đáp án A/B/C/D */}
+      <div className="space-y-2">
+        {['A','B','C','D'].map((lbl, ci) => choices[ci] ? (
+          <div key={lbl}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors"
+            style={{
+              background: correct === lbl ? '#EAF3EE' : '#fff',
+              borderColor: correct === lbl ? '#44836150' : '#E9E9E7',
+            }}>
+            <span
+              className="w-7 h-7 rounded-full text-sm font-bold flex items-center justify-center shrink-0"
+              style={{
+                background: correct === lbl ? '#448361' : '#F1F0EC',
+                color:      correct === lbl ? '#fff' : '#787774',
+              }}>{lbl}</span>
+            <span className="text-[15px] text-[#1A1A1A] leading-relaxed flex-1">
+              <TextWithMath text={choices[ci]} />
+            </span>
+            {correct === lbl && (
+              <span className="text-xs font-bold text-emerald-600 shrink-0">✓ Đúng</span>
+            )}
+          </div>
+        ) : null)}
+      </div>
+      {/* Lời giải */}
+      {solSteps.some(s => s.title || s.text || s.formula) && (
+        <div>
+          <SectionLabel>Lời giải chi tiết</SectionLabel>
+          {solSteps.map((s, i) =>
+            (s.title || s.text || s.formula || s.formula2)
+              ? <StepRenderer key={i} step={s} index={i} />
+              : null
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TuLuanRenderer({ question }: { question: Question }) {
   const hasSteps = question.steps.some(s => s.title || s.formula || s.text || s.formula2);
   return (
@@ -272,15 +324,16 @@ function StatementRenderer({ st }: { st: Statement }) {
 // SHARED PIECES
 // ─────────────────────────────────────────────────────────────
 function QuestionHeader({ question }: { question: Question }) {
-  const isDungSai = question.type === 'dung_sai';
+  const isDungSai    = question.type === 'dung_sai';
+  const isTracNghiem = question.type === 'trac_nghiem';
   if (!question.question_text && !question.question_latex) return null;
   return (
     <div>
       {question.question_no && (
         <div className="flex items-center gap-3 mb-3">
           <h2 className="font-bold text-xl text-indigo-900">{question.question_no}</h2>
-          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${isDungSai ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}>
-            {isDungSai ? 'Đúng / Sai' : 'Tự luận'}
+          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${isDungSai ? 'bg-amber-100 text-amber-700 border-amber-300' : isTracNghiem ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}>
+            {isDungSai ? 'Đúng / Sai' : isTracNghiem ? 'Trắc nghiệm' : 'Tự luận'}
           </span>
         </div>
       )}
@@ -343,10 +396,12 @@ export default function SolutionRenderer({ content, className = "" }: SolutionRe
           {/* Đường phân cách giữa các câu */}
           {idx > 0 && <div className="h-px bg-[#E9E9E7] my-8" />}
 
-          {/* Router: tự luận hay đúng/sai */}
+          {/* Router: tự luận / đúng sài / trắc nghiệm */}
           {q.type === 'dung_sai'
-            ? <DungSaiRenderer  question={q} />
-            : <TuLuanRenderer   question={q} />
+            ? <DungSaiRenderer   question={q} />
+            : q.type === 'trac_nghiem'
+            ? <TracNghiemRenderer question={q} />
+            : <TuLuanRenderer    question={q} />
           }
         </div>
       ))}
