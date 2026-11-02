@@ -53,9 +53,12 @@ function parseContent(content: string): { examName: string; questions: Question[
         question_no:    q.question_no    || "",
         question_text:  q.question_text  || "",
         question_latex: q.question_latex || "",
-        type:           q.type === 'dung_sai' ? 'dung_sai' : 'tu_luan',
-        steps:       q.steps       || [],
-        statements:  q.statements  || [],
+        type:           q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
+        steps:          q.steps          || [],
+        statements:     q.statements     || [],
+        choices:        q.choices        || [],
+        correctChoice:  q.correctChoice  || '',
+        solutionSteps:  q.solutionSteps  || [],
       }));
     } else {
       // Backward compat: câu duy nhất ở root-level, không có `type`
