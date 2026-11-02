@@ -137,7 +137,7 @@ function StepRenderer({ step, index }: { step: Step; index: number }) {
       </div>
       <div className="p-4 flex flex-col gap-3">
         {step.text    && (
-          <p className="text-[14px] text-[#57564F] leading-relaxed m-0 whitespace-pre-wrap">
+          <p className="text-[15px] text-[#57564F] leading-relaxed m-0 whitespace-pre-wrap">
             <TextWithMath text={step.text} />
           </p>
         )}
@@ -246,7 +246,7 @@ function StatementRenderer({ st }: { st: Statement }) {
       {/* Nội dung mệnh đề */}
       <div className="px-5 pt-4 pb-3">
         {st.claim && (
-          <p className="text-[14px] text-[#1A1A1A] leading-relaxed mb-3 whitespace-pre-wrap">
+          <p className="text-[15px] text-[#1A1A1A] leading-relaxed mb-3 whitespace-pre-wrap">
             <TextWithMath text={st.claim} />
           </p>
         )}
@@ -286,7 +286,7 @@ function QuestionHeader({ question }: { question: Question }) {
       )}
       <div className="bg-white border-l-[3px] border-indigo-400 rounded-r-xl p-5 shadow-sm">
         {question.question_text && (
-          <p className="text-[14px] text-gray-700 leading-relaxed mb-3 whitespace-pre-wrap">
+          <p className="text-[15px] text-gray-700 leading-relaxed mb-3 whitespace-pre-wrap">
             <TextWithMath text={question.question_text} />
           </p>
         )}
