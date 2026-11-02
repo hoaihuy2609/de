@@ -238,12 +238,28 @@ function StepRenderer({ step, index }: { step: Step; index: number }) {
 // ──────────────────────────────────────────────────────────────
 // TRẮC NGHIỆM RENDERER
 // ──────────────────────────────────────────────────────────────
+const convertStepsToSolution = (steps?: Step[]): string => {
+  if (!steps || steps.length === 0) return '';
+  return steps
+    .filter(s => s && (s.title || s.text || s.formula || s.formula2))
+    .map(s => {
+      const parts: string[] = [];
+      if (s.title) parts.push(`**${s.title}**`);
+      if (s.text) parts.push(s.text);
+      if (s.formula) parts.push(`$$${s.formula}$$`);
+      if (s.formula2) parts.push(`$$${s.formula2}$$`);
+      return parts.join('\n');
+    })
+    .join('\n\n');
+};
+
 function TracNghiemRenderer({ question }: { question: Question }) {
   const choices  = question.choices  || [];
   const correct  = question.correctChoice || '';
-  const solSteps = question.solutionSteps || [];
+  const effectiveSolution = question.solution || convertStepsToSolution(question.solutionSteps);
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <QuestionHeader question={question} />
       {/* 4 đáp án A/B/C/D */}
       <div className="space-y-2">
@@ -269,21 +285,13 @@ function TracNghiemRenderer({ question }: { question: Question }) {
           </div>
         ) : null)}
       </div>
-      {/* Lời giải */}
-      {(question.solution || solSteps.some(s => s.title || s.text || s.formula)) && (
+      {/* Lời giải chi tiết bên dưới */}
+      {effectiveSolution && (
         <div>
           <SectionLabel>Lời giải chi tiết</SectionLabel>
-          {question.solution ? (
-            <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
-              <TextWithMath text={question.solution} />
-            </div>
-          ) : (
-            solSteps.map((s, i) =>
-              (s.title || s.text || s.formula || s.formula2)
-                ? <StepRenderer key={i} step={s} index={i} />
-                : null
-            )
-          )}
+          <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+            <TextWithMath text={effectiveSolution} />
+          </div>
         </div>
       )}
     </div>
@@ -291,25 +299,20 @@ function TracNghiemRenderer({ question }: { question: Question }) {
 }
 
 function TuLuanRenderer({ question }: { question: Question }) {
-  const hasSteps = question.steps.some(s => s.title || s.formula || s.text || s.formula2);
+  const effectiveSolution = question.solution || convertStepsToSolution(question.steps);
+
   return (
     <div className="space-y-6">
       {/* Đề bài */}
       <QuestionHeader question={question} />
 
-      {/* Lời giải */}
-      {(question.solution || hasSteps) && (
+      {/* Lời giải chi tiết bên dưới */}
+      {effectiveSolution && (
         <div>
           <SectionLabel>Lời giải chi tiết</SectionLabel>
-          {question.solution ? (
-            <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
-              <TextWithMath text={question.solution} />
-            </div>
-          ) : (
-            question.steps.map((step, idx) => (
-              <StepRenderer key={idx} step={step} index={idx} />
-            ))
-          )}
+          <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+            <TextWithMath text={effectiveSolution} />
+          </div>
         </div>
       )}
     </div>
@@ -323,6 +326,20 @@ function DungSaiRenderer({ question }: { question: Question }) {
   const hasStatements = question.statements.some(s => s.claim || s.claim_latex);
   const trueCount  = question.statements.filter(s => s.verdict === true).length;
   const falseCount = question.statements.filter(s => s.verdict === false).length;
+
+  // Lấy lời giải từ question.solution hoặc tự động gom các bước chứng minh của a, b, c, d xuống dưới
+  const effectiveSolution = question.solution || (() => {
+    const hasLegacySteps = question.statements.some(st => st.steps?.some(s => s.title || s.text || s.formula || s.formula2));
+    if (!hasLegacySteps) return '';
+    return question.statements
+      .map(st => {
+        const sText = convertStepsToSolution(st.steps);
+        const vBadge = st.verdict === true ? '(ĐÚNG)' : st.verdict === false ? '(SAI)' : '';
+        return sText ? `**Mệnh đề ${st.label.toUpperCase()} ${vBadge}:**\n${sText}` : '';
+      })
+      .filter(Boolean)
+      .join('\n\n---\n\n');
+  })();
 
   return (
     <div className="space-y-6">
@@ -342,11 +359,11 @@ function DungSaiRenderer({ question }: { question: Question }) {
         </div>
       )}
 
-      {/* Các mệnh đề */}
+      {/* 4 Mệnh đề gọn gàng: chỉ gồm nội dung + nhãn Đúng (xanh) / Sai (đỏ) */}
       {hasStatements && (
         <div>
           <SectionLabel>Phân tích 4 mệnh đề</SectionLabel>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {question.statements.map((st, i) => (
               (st.claim || st.claim_latex) ? <StatementRenderer key={i} st={st} /> : null
             ))}
@@ -354,12 +371,12 @@ function DungSaiRenderer({ question }: { question: Question }) {
         </div>
       )}
 
-      {/* Lời giải chi tiết chung */}
-      {question.solution && (
-        <div className="mt-6">
+      {/* Lời giải chi tiết chung bên dưới cùng */}
+      {effectiveSolution && (
+        <div className="mt-8">
           <SectionLabel>Hướng dẫn giải chi tiết</SectionLabel>
-          <div className="bg-white border border-[#E9E9E7] rounded-xl p-5 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
-            <TextWithMath text={question.solution} />
+          <div className="bg-white border border-[#E9E9E7] rounded-xl p-6 shadow-sm text-[15px] text-[#1A1A1A] leading-relaxed">
+            <TextWithMath text={effectiveSolution} />
           </div>
         </div>
       )}
@@ -368,7 +385,7 @@ function DungSaiRenderer({ question }: { question: Question }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// STATEMENT RENDERER (một mệnh đề)
+// STATEMENT RENDERER (một mệnh đề gọn gàng)
 // ─────────────────────────────────────────────────────────────
 function StatementRenderer({ st }: { st: Statement }) {
   const isTrue  = st.verdict === true;
@@ -383,14 +400,12 @@ function StatementRenderer({ st }: { st: Statement }) {
     return <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 border border-gray-200">Chưa kết luận</span>;
   };
 
-  const hasProof = st.steps?.some(s => s.title || s.text || s.formula);
-
   return (
-    <div className={`bg-white border rounded-2xl overflow-hidden shadow-sm ${borderColor}`}>
+    <div className={`bg-white border rounded-xl overflow-hidden shadow-sm transition-all ${borderColor}`}>
       {/* Header */}
-      <div className={`flex items-center justify-between px-5 py-3 border-b ${borderColor} ${headBg}`}>
+      <div className={`flex items-center justify-between px-4 py-2.5 border-b ${borderColor} ${headBg}`}>
         <div className="flex items-center gap-2">
-          <span className={`font-mono text-sm font-bold w-7 h-7 rounded-full flex items-center justify-center text-white ${isTrue ? 'bg-emerald-500' : isFalse ? 'bg-red-500' : 'bg-[#6B7CDB]'}`}>
+          <span className={`font-mono text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center text-white ${isTrue ? 'bg-emerald-500' : isFalse ? 'bg-red-500' : 'bg-[#6B7CDB]'}`}>
             {st.label.toUpperCase()}
           </span>
           <span className="font-bold text-sm text-[#1A1A1A]">Mệnh đề {st.label.toUpperCase()}</span>
@@ -399,33 +414,14 @@ function StatementRenderer({ st }: { st: Statement }) {
       </div>
 
       {/* Nội dung mệnh đề */}
-      <div className="px-5 pt-4 pb-3">
-        {st.claim && (
-          <p className="text-[15px] text-[#1A1A1A] leading-relaxed mb-3 whitespace-pre-wrap">
-            <TextWithMath text={st.claim} />
-          </p>
-        )}
+      <div className="p-4 text-[15px] text-[#1A1A1A] leading-relaxed">
+        {st.claim && <TextWithMath text={st.claim} />}
         {st.claim_latex && <KatexBlock tex={st.claim_latex} />}
       </div>
-
-      {/* Chứng minh */}
-      {hasProof && (
-        <div className="px-5 pb-5">
-          <div className="pt-3 border-t border-dashed border-[#E9E9E7]">
-            <div className="text-[10px] font-mono font-bold text-[#AEACA8] uppercase tracking-[0.15em] mb-3">
-              Chứng minh
-            </div>
-            {st.steps.map((s, i) => (s.title || s.text || s.formula || s.formula2) ? <StepRenderer key={i} step={s} index={i} /> : null)}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// SHARED PIECES
-// ─────────────────────────────────────────────────────────────
 function QuestionHeader({ question }: { question: Question }) {
   const isDungSai    = question.type === 'dung_sai';
   const isTracNghiem = question.type === 'trac_nghiem';
