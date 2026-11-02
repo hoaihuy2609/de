@@ -15,7 +15,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
-type QuestionType = 'tu_luan' | 'dung_sai';
+type QuestionType = 'tu_luan' | 'dung_sai' | 'trac_nghiem';
 
 interface Question {
   questionNo: string;
@@ -24,6 +24,9 @@ interface Question {
   type: QuestionType;
   steps: Step[];           // dùng khi type === 'tu_luan'
   statements: Statement[]; // dùng khi type === 'dung_sai'
+  choices: string[];       // dùng khi type === 'trac_nghiem' (A/B/C/D)
+  correctChoice: string;   // 'A' | 'B' | 'C' | 'D'
+  solutionSteps: Step[];   // bước giải cho trắc nghiệm
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -49,6 +52,9 @@ const emptyQuestion = (): Question => ({
   type: "tu_luan",
   steps: [emptyStep()],
   statements: STMT_LABELS.map(emptyStatement),
+  choices: ['', '', '', ''],
+  correctChoice: '',
+  solutionSteps: [emptyStep()],
 });
 
 // Normalize question từ JSON cũ (backward compat)
@@ -56,11 +62,14 @@ const normalizeQuestion = (q: any): Question => ({
   questionNo: q.question_no || q.questionNo || "",
   qText:      q.question_text || q.qText || "",
   qFormula:   q.question_latex || q.qFormula || "",
-  type:       q.type === 'dung_sai' ? 'dung_sai' : 'tu_luan',
+  type:       q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
   steps:      q.steps?.length > 0 ? q.steps : [emptyStep()],
   statements: q.statements?.length > 0
     ? q.statements
     : STMT_LABELS.map(emptyStatement),
+  choices: q.choices?.length === 4 ? q.choices : ['', '', '', ''],
+  correctChoice: q.correctChoice || '',
+  solutionSteps: q.solutionSteps?.length > 0 ? q.solutionSteps : [emptyStep()],
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -419,11 +428,6 @@ export default function SolutionEditor({
   const updateQ = (key: keyof Question, val: any) =>
     setQuestions(prev => prev.map((q, i) => i === activeQIdx ? { ...q, [key]: val } : q));
 
-  const toggleType = () => {
-    const next: QuestionType = activeQuestion.type === 'tu_luan' ? 'dung_sai' : 'tu_luan';
-    updateQ('type', next);
-  };
-
   const addQuestion = () => {
     setQuestions(prev => [...prev, emptyQuestion()]);
     setActiveQIdx(questions.length);
@@ -653,7 +657,7 @@ export default function SolutionEditor({
                     {q.questionNo || `Câu ${idx + 1}`}
                     {/* Badge loại bài */}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${activeQIdx === idx ? 'bg-indigo-500 text-indigo-100' : 'bg-gray-200 text-gray-500'}`}>
-                      {q.type === 'dung_sai' ? 'Đ/S' : 'TL'}
+                      {q.type === 'dung_sai' ? 'Đ/S' : q.type === 'trac_nghiem' ? 'TN' : 'TL'}
                     </span>
                     {questions.length > 1 && (
                       <span onClick={e => { e.stopPropagation(); removeQuestion(idx); }}
@@ -671,15 +675,27 @@ export default function SolutionEditor({
 
               {/* Info câu đang active */}
               <div className="space-y-4">
-                {/* Toggle loại bài */}
+                {/* Loại câu hỏi — 3 nút */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-[#F7F6F3] border border-[#E9E9E7]">
                   <span className="text-sm font-semibold text-[#57564F]">Loại câu hỏi</span>
-                  <button onClick={toggleType}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${activeQuestion.type === 'dung_sai' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}`}>
-                    {activeQuestion.type === 'dung_sai'
-                      ? <><ToggleRight className="w-4 h-4" /> Đúng / Sai</>
-                      : <><ToggleLeft  className="w-4 h-4" /> Tự luận</>}
-                  </button>
+                  <div className="flex gap-1.5">
+                    {([
+                      { val: 'tu_luan'     as QuestionType, label: 'Tự luận',      bg: '#6B7CDB', ring: '#EEF0FB' },
+                      { val: 'dung_sai'    as QuestionType, label: 'Đúng / Sai',     bg: '#D9730D', ring: '#FFF3E8' },
+                      { val: 'trac_nghiem' as QuestionType, label: 'Trắc nghiệm', bg: '#448361', ring: '#EAF3EE' },
+                    ] as const).map(opt => (
+                      <button key={opt.val}
+                        onClick={() => updateQ('type', opt.val)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border"
+                        style={{
+                          background: activeQuestion.type === opt.val ? opt.bg : '#fff',
+                          color:      activeQuestion.type === opt.val ? '#fff' : '#787774',
+                          borderColor: activeQuestion.type === opt.val ? opt.bg : '#E9E9E7',
+                        }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -729,6 +745,54 @@ export default function SolutionEditor({
               ))}
             </div>
           )}
+
+          {/* ── TRẮC NGHIỆM: 4 đáp án + lời giải ── */}
+          {activeQuestion.type === 'trac_nghiem' && (
+            <div className="space-y-4">
+              <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2 text-lg">
+                <Layers className="w-5 h-5 text-emerald-500" /> Đáp án — {activeQuestion.questionNo || `Câu ${activeQIdx + 1}`}
+              </h3>
+              {/* 4 lựa chọn A/B/C/D */}
+              <div className="space-y-2">
+                {['A', 'B', 'C', 'D'].map((lbl, ci) => (
+                  <div key={lbl} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateQ('correctChoice', activeQuestion.correctChoice === lbl ? '' : lbl)}
+                      className="w-8 h-8 rounded-full text-sm font-bold shrink-0 border-2 transition-all"
+                      style={{
+                        background: activeQuestion.correctChoice === lbl ? '#448361' : '#fff',
+                        color: activeQuestion.correctChoice === lbl ? '#fff' : '#787774',
+                        borderColor: activeQuestion.correctChoice === lbl ? '#448361' : '#E9E9E7',
+                      }}
+                    >{lbl}</button>
+                    <input
+                      className="flex-1 p-2.5 rounded-lg border outline-none focus:border-emerald-400 text-sm transition-colors"
+                      style={{ borderColor: activeQuestion.correctChoice === lbl ? '#44836150' : '#E9E9E7', background: activeQuestion.correctChoice === lbl ? '#EAF3EE' : '#fff' }}
+                      placeholder={`Đáp án ${lbl}...`}
+                      value={activeQuestion.choices[ci] || ''}
+                      onChange={e => { const c = [...activeQuestion.choices]; c[ci] = e.target.value; updateQ('choices', c); }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {/* Bước giải */}
+              <div className="pt-3 border-t border-[#E9E9E7] space-y-3">
+                <div className="text-xs font-bold text-[#787774] uppercase tracking-wider">Lời giải chi tiết</div>
+                {activeQuestion.solutionSteps.map((step, idx) => (
+                  <StepEditor key={idx} step={step} idx={idx} total={activeQuestion.solutionSteps.length} compact
+                    onChange={(i, k, v) => { const ss = [...activeQuestion.solutionSteps]; ss[i] = { ...ss[i], [k]: v }; updateQ('solutionSteps', ss); }}
+                    onRemove={i => updateQ('solutionSteps', activeQuestion.solutionSteps.filter((_, j) => j !== i))}
+                    onMove={(i, dir) => { const arr = [...activeQuestion.solutionSteps], j = i + dir; if (j >= 0 && j < arr.length) { [arr[i], arr[j]] = [arr[j], arr[i]]; updateQ('solutionSteps', arr); } }}
+                    onFocus={trackFocus} />
+                ))}
+                <button
+                  onClick={() => updateQ('solutionSteps', [...activeQuestion.solutionSteps, emptyStep()])}
+                  className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#DCDCDA] text-[#787774] font-semibold text-xs hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50/50 transition-all flex items-center justify-center gap-1.5"
+                ><Plus className="w-3.5 h-3.5" /> Thêm bước giải</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ════════ PREVIEW ════════ */}
@@ -749,8 +813,8 @@ export default function SolutionEditor({
                         {examName && <div className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-1.5">{examName}</div>}
                         <div className="font-bold text-2xl text-indigo-900 mb-1">{q.questionNo || `Câu ${qIdx + 1}`}</div>
                         {/* Badge loại bài */}
-                        <span className={`inline-block text-xs font-bold px-2.5 py-0.5 rounded-full mb-3 ${q.type === 'dung_sai' ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'}`}>
-                          {q.type === 'dung_sai' ? 'Đúng / Sai' : 'Tự luận'}
+                        <span className={`inline-block text-xs font-bold px-2.5 py-0.5 rounded-full mb-3 ${q.type === 'dung_sai' ? 'bg-amber-100 text-amber-700 border border-amber-300' : q.type === 'trac_nghiem' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-indigo-100 text-indigo-700 border border-indigo-200'}`}>
+                          {q.type === 'dung_sai' ? 'Đúng / Sai' : q.type === 'trac_nghiem' ? 'Trắc nghiệm' : 'Tự luận'}
                         </span>
                         <div className="bg-white border-l-[3px] border-indigo-400 rounded-r-xl p-5 shadow-sm">
                           {q.qText    && <p className="text-[14px] text-gray-700 leading-relaxed mb-3 whitespace-pre-wrap"><TextWithMath text={q.qText} /></p>}
@@ -783,6 +847,33 @@ export default function SolutionEditor({
                           (st.claim || st.claim_latex)
                             ? <StatementPreview key={i} st={st} />
                             : null
+                        )}
+                      </div>
+                    )}
+
+                    {/* Preview trắc nghiệm */}
+                    {q.type === 'trac_nghiem' && (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          {['A','B','C','D'].map((lbl, ci) => q.choices?.[ci] ? (
+                            <div key={lbl} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: q.correctChoice === lbl ? '#EAF3EE' : '#fff', border: `1px solid ${q.correctChoice === lbl ? '#44836150' : '#E9E9E7'}` }}>
+                              <span className="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0" style={{ background: q.correctChoice === lbl ? '#448361' : '#F1F0EC', color: q.correctChoice === lbl ? '#fff' : '#787774' }}>{lbl}</span>
+                              <span className="text-[13px] text-[#1A1A1A]">{q.choices[ci]}</span>
+                              {q.correctChoice === lbl && <span className="ml-auto text-xs font-bold text-emerald-600">✓ Đúng</span>}
+                            </div>
+                          ) : null)}
+                        </div>
+                        {q.solutionSteps?.some((s: Step) => s.title || s.formula || s.text) && (
+                          <div>
+                            <div className="text-[10px] font-mono text-[#AEACA8] uppercase tracking-[0.15em] flex items-center gap-3 mb-3">
+                              Lời giải <div className="h-[1px] flex-1 bg-[#E9E9E7]" />
+                            </div>
+                            {q.solutionSteps.map((step: Step, idx: number) =>
+                              (step.title || step.formula || step.text)
+                                ? <StepPreview key={idx} step={step} index={idx} />
+                                : null
+                            )}
+                          </div>
                         )}
                       </div>
                     )}

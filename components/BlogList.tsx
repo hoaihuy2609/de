@@ -60,7 +60,7 @@ interface CardQuestionData {
     questionNo: string;
     questionText: string;
     questionLatex: string;
-    type: 'tu_luan' | 'dung_sai';
+    type: 'tu_luan' | 'dung_sai' | 'trac_nghiem';
 }
 
 function parseCardQuestion(content: string): CardQuestionData | null {
@@ -74,7 +74,7 @@ function parseCardQuestion(content: string): CardQuestionData | null {
                 questionNo: q.question_no || '',
                 questionText: q.question_text || '',
                 questionLatex: q.question_latex || '',
-                type: q.type === 'dung_sai' ? 'dung_sai' : 'tu_luan',
+                type: q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
             };
         }
         // Backward compat: root-level single question
@@ -103,7 +103,8 @@ interface QuestionCardProps {
 
 function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardProps) {
     const q = parseCardQuestion(blog.content);
-    const isDungSai = q?.type === 'dung_sai';
+    const isDungSai    = q?.type === 'dung_sai';
+    const isTracNghiem = q?.type === 'trac_nghiem';
     const hasQuestion = q && (q.questionText || q.questionLatex);
 
     return (
@@ -156,11 +157,11 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                     <span style={{
                         fontSize: '10px', fontWeight: 700,
                         padding: '2px 8px', borderRadius: '5px',
-                        background: isDungSai ? '#FEF3C7' : '#EEF0FB',
-                        color: isDungSai ? '#92400E' : '#6B7CDB',
-                        border: `1px solid ${isDungSai ? '#FDE68A' : '#D0D5F5'}`,
+                        background: isDungSai ? '#FEF3C7' : isTracNghiem ? '#EAF3EE' : '#EEF0FB',
+                        color: isDungSai ? '#92400E' : isTracNghiem ? '#448361' : '#6B7CDB',
+                        border: `1px solid ${isDungSai ? '#FDE68A' : isTracNghiem ? '#44836140' : '#D0D5F5'}`,
                     }}>
-                        {isDungSai ? 'Đúng / Sai' : q ? 'Tự luận' : 'Bài viết'}
+                        {isDungSai ? 'Đúng / Sai' : isTracNghiem ? 'Trắc nghiệm' : q ? 'Tự luận' : 'Bài viết'}
                     </span>
                     {/* Grade badge */}
                     <span style={{
