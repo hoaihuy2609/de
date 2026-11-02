@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BlogPost } from '../types';
-import { BookOpen, Plus, Search, Filter, FileText } from 'lucide-react';
+import { BookOpen, Plus, Search, Filter, FileText, Check, Sparkles } from 'lucide-react';
+import ExamStyleModal from './ExamStyleModal';
+import { SelectedQuestionItem } from '../src/services/examLatexService';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
@@ -99,9 +101,11 @@ interface QuestionCardProps {
     onEditBlog?: (blog: BlogPost) => void;
     onClick: () => void;
     gc: { bg: string; text: string; dot: string };
+    isSelected?: boolean;
+    onToggleSelect?: () => void;
 }
 
-function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardProps) {
+function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc, isSelected, onToggleSelect }: QuestionCardProps) {
     const q = parseCardQuestion(blog.content);
     const isDungSai    = q?.type === 'dung_sai';
     const isTracNghiem = q?.type === 'trac_nghiem';
@@ -114,7 +118,7 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                 borderRadius: '14px',
                 overflow: 'hidden',
                 cursor: 'pointer',
-                border: '1px solid #E9E9E7',
+                border: isSelected ? '2px solid #7B1113' : '1px solid #E9E9E7',
                 background: '#fff',
                 display: 'flex',
                 flexDirection: 'column',
@@ -193,21 +197,39 @@ function QuestionCard({ blog, isAdmin, onEditBlog, onClick, gc }: QuestionCardPr
                         }}>{s?.label||'Mức —'}</span>;
                     })()}
 
-                    {/* Nút Thêm — chức năng code sau */}
+                    {/* Nút Thêm vào đề thi */}
                     <button
-                        onClick={e => e.stopPropagation()}
-                        title="Thêm"
+                        onClick={e => {
+                            e.stopPropagation();
+                            if (onToggleSelect) onToggleSelect();
+                        }}
+                        title={isSelected ? "Bỏ chọn khỏi đề thi" : "Thêm vào đề thi kiểm tra"}
                         style={{
                             fontSize: '11px', fontWeight: 700, lineHeight: 1,
-                            padding: '2px 7px', borderRadius: '5px',
-                            background: '#F1F0EC', color: '#787774',
-                            border: '1px solid #E2E1DD', cursor: 'pointer',
+                            padding: '3px 8px', borderRadius: '5px',
+                            background: isSelected ? '#7B1113' : '#F1F0EC',
+                            color: isSelected ? '#fff' : '#787774',
+                            border: `1px solid ${isSelected ? '#7B1113' : '#E2E1DD'}`,
+                            cursor: 'pointer',
                             transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center', gap: '3px',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#EEF0FB'; e.currentTarget.style.color = '#6B7CDB'; e.currentTarget.style.borderColor = '#D0D5F5'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#F1F0EC'; e.currentTarget.style.color = '#787774'; e.currentTarget.style.borderColor = '#E2E1DD'; }}
+                        onMouseEnter={e => {
+                            if (!isSelected) {
+                                e.currentTarget.style.background = '#EEF0FB';
+                                e.currentTarget.style.color = '#6B7CDB';
+                                e.currentTarget.style.borderColor = '#D0D5F5';
+                            }
+                        }}
+                        onMouseLeave={e => {
+                            if (!isSelected) {
+                                e.currentTarget.style.background = '#F1F0EC';
+                                e.currentTarget.style.color = '#787774';
+                                e.currentTarget.style.borderColor = '#E2E1DD';
+                            }
+                        }}
                     >
-                        + Thêm
+                        {isSelected ? '✓ Đã chọn' : '+ Thêm'}
                     </button>
 
                     {/* Admin: nút Sửa (thay thế badge "Đã đăng / Nháp") */}
@@ -310,6 +332,46 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
     const [selectedTag, setSelectedTag] = useState('');
     const [gradeFilter, setGradeFilter] = useState<number>(0);
     const [showFilters, setShowFilters] = useState(false);
+    const [selectedBlogIds, setSelectedBlogIds] = useState<string[]>([]);
+    const [isExamModalOpen, setIsExamModalOpen] = useState(false);
+
+    const handleToggleSelect = (id: string) => {
+        setSelectedBlogIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const selectedQuestions: SelectedQuestionItem[] = useMemo(() => {
+        return blogs
+            .filter(b => selectedBlogIds.includes(b.id))
+            .map((b, idx) => {
+                try {
+                    const p = JSON.parse(b.content);
+                    if (p.type === 'physics_solution' && p.data) {
+                        const q = p.data.questions?.[0] || p.data;
+                        return {
+                            id: b.id,
+                            questionNo: q.question_no || `Câu ${idx + 1}`,
+                            qText: q.question_text || '',
+                            qFormula: q.question_latex || '',
+                            type: q.type === 'dung_sai' ? 'dung_sai' : q.type === 'trac_nghiem' ? 'trac_nghiem' : 'tu_luan',
+                            choices: q.choices || [],
+                            correctChoice: q.correctChoice || '',
+                            statements: q.statements || [],
+                            solutionSteps: q.solutionSteps || [],
+                            steps: q.steps || [],
+                            level: b.level || 0,
+                        };
+                    }
+                } catch (_) {}
+                return {
+                    id: b.id,
+                    questionNo: `Câu ${idx + 1}`,
+                    qText: b.summary || b.title,
+                    type: 'tu_luan' as const,
+                };
+            });
+    }, [blogs, selectedBlogIds]);
 
     useEffect(() => {
         const fetchBlogs = async () => {
@@ -530,11 +592,94 @@ const BlogList: React.FC<BlogListProps> = ({ isAdmin, studentGrade, onReadBlog, 
                                 onEditBlog={onEditBlog}
                                 onClick={() => onReadBlog(blog)}
                                 gc={gc}
+                                isSelected={selectedBlogIds.includes(blog.id)}
+                                onToggleSelect={() => handleToggleSelect(blog.id)}
                             />
                         );
                     })}
                 </div>
             )}
+
+            {/* ── FLOATING BAR: Khi có câu hỏi được chọn ── */}
+            {selectedBlogIds.length > 0 && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: '24px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 40,
+                        background: '#1A1A1A',
+                        color: '#fff',
+                        padding: '10px 20px',
+                        borderRadius: '16px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                        maxWidth: '92vw',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
+                        <span style={{
+                            minWidth: '22px', height: '22px', borderRadius: '50%',
+                            background: '#7B1113', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '11px', fontWeight: 700, padding: '0 6px',
+                        }}>
+                            {selectedBlogIds.length}
+                        </span>
+                        <span>câu hỏi đã chọn</span>
+                    </div>
+
+                    <button
+                        onClick={() => setSelectedBlogIds([])}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#AEACA8',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: '4px 8px',
+                        }}
+                    >
+                        Bỏ chọn
+                    </button>
+
+                    <button
+                        onClick={() => setIsExamModalOpen(true)}
+                        style={{
+                            background: '#7B1113',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 12px rgba(123, 17, 19, 0.4)',
+                            transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#920000'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#7B1113'; }}
+                    >
+                        <Sparkles style={{ width: '15px', height: '15px', color: '#FCD34D' }} />
+                        <span>Biên soạn đề (LaTeX)</span>
+                    </button>
+                </div>
+            )}
+
+            {/* ── MODAL TÙY BIẾN STYLE & LAYOUT ── */}
+            <ExamStyleModal
+                isOpen={isExamModalOpen}
+                onClose={() => setIsExamModalOpen(false)}
+                questions={selectedQuestions}
+            />
         </div>
     );
 };

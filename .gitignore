@@ -27,3 +27,5 @@ dist-ssr
 k6_bin/
 test-*.js
 .vercel
+
+demo_pdf_so_sanh/
